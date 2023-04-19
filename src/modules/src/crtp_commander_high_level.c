@@ -298,9 +298,9 @@ int crtpCommanderHighLevelDisable()
   return 0;
 }
 
-bool crtpCommanderHighLevelGetSetpoint(setpoint_t* setpoint, const state_t *state, stabilizerStep_t stabilizerStep)
+bool crtpCommanderHighLevelGetSetpoint(setpoint_t* setpoint, const state_t *state, uint32_t tick)
 {
-  if (!RATE_DO_EXECUTE(RATE_HL_COMMANDER, stabilizerStep)) {
+  if (!RATE_DO_EXECUTE(RATE_HL_COMMANDER, tick)) {
     return false;
   }
 

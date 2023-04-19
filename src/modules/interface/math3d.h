@@ -34,9 +34,9 @@ SOFTWARE.
 #endif
 
 #ifndef M_PI_F
-#define M_PI_F   (3.14159265358979323846f)
-#define M_1_PI_F (0.31830988618379067154f)
-#define M_PI_2_F (1.57079632679f)
+#define M_PI_F   (3.14159265358979323846f)  // pi
+#define M_1_PI_F (0.31830988618379067154f)  // 1/pi
+#define M_PI_2_F (1.57079632679f)			// pi/2
 #endif
 
 
@@ -726,6 +726,14 @@ static inline struct mat33 quat2rotmat(struct quat q) {
 	return m;
 }
 
+static inline struct vec quat2rp(struct quat q) {
+	struct vec v;
+	v.x = q.x/q.w;
+	v.y = q.y/q.w;
+	v.z = q.z/q.w;
+	return v;
+}
+
 //
 // operators
 //
@@ -749,7 +757,7 @@ static inline struct quat qqmul(struct quat q, struct quat p) {
 	float w = -q.x*p.x - q.y*p.y - q.z*p.z + q.w*p.w;
 	return mkquat(x, y, z, w);
 }
-// invert a quaternion.
+// invert a quaternion (conjugate).
 static inline struct quat qinv(struct quat q) {
 	return mkquat(-q.x, -q.y, -q.z, q.w);
 }

@@ -192,7 +192,7 @@ float motorsCompensateBatteryVoltage(uint32_t id, float iThrust, float supplyVol
       return iThrust;
     }
 
-    float thrust = (iThrust / 65536.0f) * 60;
+    float thrust = (iThrust / 65536.0f) * 60;  // scale with total thrust
     float volts = -0.0006239f * thrust * thrust + 0.088f * thrust;
     float ratio = volts / supplyVoltage;
     return UINT16_MAX * ratio;
@@ -610,7 +610,7 @@ void motorsPlayTone(uint16_t frequency, uint16_t duration_msec)
   motorsBeep(MOTOR_M4, false, frequency, 0);
 }
 
-// Plays a melody from a note array
+// Plays a melody from a note array, [note1 dur1 note2 dur2], end at '0'
 void motorsPlayMelody(uint16_t *notes)
 {
   int i = 0;

@@ -40,7 +40,7 @@ bool sensorsAreCalibrated(void);
 bool sensorsManufacturingTest(void);
 
 // For legacy control
-void sensorsAcquire(sensorData_t *sensors);
+void sensorsAcquire(sensorData_t *sensors, const uint32_t tick);
 
 /**
  * This function should block and unlock at 1KhZ

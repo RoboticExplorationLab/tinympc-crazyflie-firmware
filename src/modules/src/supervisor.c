@@ -96,7 +96,7 @@ static bool isFlyingCheck()
 //
 static bool isTumbledCheck(const sensorData_t *data)
 {
-  const float tolerance = -0.5;
+  const float tolerance = -0.5;  // in G
   static uint32_t hysteresis = 0;
   //
   // We need a SUPERVISOR_HYSTERESIS_THRESHOLD amount of readings that indicate

@@ -867,7 +867,7 @@ bool sensorsBoschReadBaro(baro_t *baro)
   return (pdTRUE == xQueueReceive(baroPrimDataQueue, baro, 0));
 }
 
-void sensorsBoschAcquire(sensorData_t *sensors)
+void sensorsBoschAcquire(sensorData_t *sensors, const uint32_t tick)
 {
   sensorsReadGyro(&sensors->gyro);
   sensorsReadAcc(&sensors->acc);

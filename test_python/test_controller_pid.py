@@ -33,9 +33,9 @@ def test_controller_pid():
     sensors.gyro.y = 0
     sensors.gyro.z = 0
 
-    step = 100
+    tick = 100
 
-    cffirmware.controllerPid(control, setpoint,sensors,state,step)
+    cffirmware.controllerPid(control, setpoint,sensors,state,tick)
     assert control.controlMode == cffirmware.controlModeLegacy
     # control.thrust will be at a (tuned) hover-state
     assert control.roll == 0

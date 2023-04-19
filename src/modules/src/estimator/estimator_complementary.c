@@ -63,7 +63,7 @@ bool estimatorComplementaryTest(void)
   return pass;
 }
 
-void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerStep)
+void estimatorComplementary(state_t *state, const uint32_t tick)
 {
   // Pull the latest sensors values of interest; discard the rest
   measurement_t m;
@@ -88,7 +88,7 @@ void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerSte
   }
 
   // Update filter
-  if (RATE_DO_EXECUTE(ATTITUDE_UPDATE_RATE, stabilizerStep)) {
+  if (RATE_DO_EXECUTE(ATTITUDE_UPDATE_RATE, tick)) {
     sensfusion6UpdateQ(gyro.x, gyro.y, gyro.z,
                         acc.x, acc.y, acc.z,
                         ATTITUDE_UPDATE_DT);
@@ -111,7 +111,7 @@ void estimatorComplementary(state_t *state, const stabilizerStep_t stabilizerSte
     positionUpdateVelocity(state->acc.z, ATTITUDE_UPDATE_DT);
   }
 
-  if (RATE_DO_EXECUTE(POS_UPDATE_RATE, stabilizerStep)) {
-    positionEstimate(state, &baro, &tof, POS_UPDATE_DT, stabilizerStep);
+  if (RATE_DO_EXECUTE(POS_UPDATE_RATE, tick)) {
+    positionEstimate(state, &baro, &tof, POS_UPDATE_DT, tick);
   }
 }

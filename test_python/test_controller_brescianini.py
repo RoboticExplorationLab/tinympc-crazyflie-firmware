@@ -37,9 +37,9 @@ def test_controller_brescianini():
     sensors.gyro.y = 0
     sensors.gyro.z = 0
 
-    step = 100
+    tick = 100
 
-    cffirmware.controllerBrescianini(control, setpoint,sensors,state,step)
+    cffirmware.controllerBrescianini(control, setpoint,sensors,state,tick)
     assert control.controlMode == cffirmware.controlModeForceTorque
     # control.thrustSi will be at a (tuned) hover-state
     assert control.torqueX == 0

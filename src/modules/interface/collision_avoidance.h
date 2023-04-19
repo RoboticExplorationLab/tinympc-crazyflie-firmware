@@ -149,7 +149,7 @@ bool collisionAvoidanceTest(void);
 // Wrapper that uses the peer localization system to construct the input arrays
 // for collisionAvoidanceUpdateSetpointCore.
 void collisionAvoidanceUpdateSetpoint(
-  setpoint_t *setpoint, sensorData_t const *sensorData, state_t const *state, stabilizerStep_t stabilizerStep);
+  setpoint_t *setpoint, sensorData_t const *sensorData, state_t const *state, uint32_t tick);
 
 #endif // CRAZYFLIE_FW defined
 

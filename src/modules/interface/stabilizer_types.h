@@ -35,9 +35,6 @@
  * All have a timestamp to be set when the data is calculated.
  */
 
-// stabilizerStep_t represents the number of times the stabilizer loop has run (at 1000 Hz)
-typedef uint32_t stabilizerStep_t;
-
 /** Attitude in euler angle form */
 typedef struct attitude_s {
   uint32_t timestamp;  // Timestamp when the data was computed
@@ -356,7 +353,7 @@ typedef struct
 } barometerMeasurement_t;
 
 
-// Frequencies to bo used with the RATE_DO_EXECUTE_HZ macro. Do NOT use an arbitrary number.
+// Frequencies to be used with the RATE_DO_EXECUTE_HZ macro. Do NOT use an arbitrary number.
 #define RATE_1000_HZ 1000
 #define RATE_500_HZ 500
 #define RATE_250_HZ 250

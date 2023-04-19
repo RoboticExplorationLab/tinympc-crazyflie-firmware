@@ -5,9 +5,7 @@
  * +------+    / /_/ / / /_/ /__/ /  / /_/ / / /_/  __/
  *  ||  ||    /_____/_/\__/\___/_/   \__,_/ /___/\___/
  *
- * Crazyflie control firmware
- *
- * Copyright (C) 2016-2021 Bitcraze AB
+ * Copyright (C) 2011-2023 Bitcraze AB
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +19,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- *
+ * Outlier rejection filter for the kalman filter
  */
+
 #pragma once
 
 #include "stabilizer_types.h"
 
-void positionEstimate(state_t* estimate, const baro_t* baro, const tofMeasurement_t* tofMeasurement, float dt, uint32_t tick);
-void positionUpdateVelocity(float accWZ, float dt);
+typedef struct {
+    float integrator;
+    uint32_t latestUpdateMs;
+    bool isFilterOpen;
+} OutlierFilterTdoaState_t;
+
+void outlierFilterTdoaReset(OutlierFilterTdoaState_t* this);
+bool outlierFilterTdoaValidateIntegrator(OutlierFilterTdoaState_t* this, const tdoaMeasurement_t* tdoa, const float error, const uint32_t nowMs);

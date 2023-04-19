@@ -115,7 +115,7 @@ bool controllerMellingerTest(controllerMellinger_t* self)
 void controllerMellinger(controllerMellinger_t* self, control_t *control, const setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
-                                         const stabilizerStep_t stabilizerStep)
+                                         const uint32_t tick)
 {
   struct vec r_error;
   struct vec v_error;
@@ -131,7 +131,7 @@ void controllerMellinger(controllerMellinger_t* self, control_t *control, const 
 
   control->controlMode = controlModeLegacy;
 
-  if (!RATE_DO_EXECUTE(ATTITUDE_RATE, stabilizerStep)) {
+  if (!RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     return;
   }
 
@@ -328,9 +328,9 @@ bool controllerMellingerFirmwareTest(void)
 void controllerMellingerFirmware(control_t *control, const setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
-                                         const stabilizerStep_t stabilizerStep)
+                                         const uint32_t tick)
 {
-  controllerMellinger(&g_self, control, setpoint, sensors, state, stabilizerStep);
+  controllerMellinger(&g_self, control, setpoint, sensors, state, tick);
 }
 
 

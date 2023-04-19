@@ -56,11 +56,11 @@ static float capAngle(float angle) {
 void controllerPid(control_t *control, const setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
-                                         const stabilizerStep_t stabilizerStep)
+                                         const uint32_t tick)
 {
   control->controlMode = controlModeLegacy;
 
-  if (RATE_DO_EXECUTE(ATTITUDE_RATE, stabilizerStep)) {
+  if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     // Rate-controled YAW is moving YAW angle setpoint
     if (setpoint->mode.yaw == modeVelocity) {
       attitudeDesired.yaw = capAngle(attitudeDesired.yaw + setpoint->attitudeRate.yaw * ATTITUDE_UPDATE_DT);
@@ -90,11 +90,11 @@ void controllerPid(control_t *control, const setpoint_t *setpoint,
     attitudeDesired.yaw = capAngle(attitudeDesired.yaw);
   }
 
-  if (RATE_DO_EXECUTE(POSITION_RATE, stabilizerStep)) {
+  if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
     positionController(&actuatorThrust, &attitudeDesired, setpoint, state);
   }
 
-  if (RATE_DO_EXECUTE(ATTITUDE_RATE, stabilizerStep)) {
+  if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     // Switch between manual and automatic position control
     if (setpoint->mode.z == modeDisable) {
       actuatorThrust = setpoint->thrust;
