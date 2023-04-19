@@ -63,17 +63,11 @@ void appMain() {
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
 #define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z]
 
-// static float K[NU][NXt] = {
-//   {0.000000f,0.000000f,0.689184f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.715675f,0.000000f,0.000000f,0.000000f},
-//   {0.000039f,-0.000787f,0.000000f,0.008870f,0.000443f,0.000036f,0.000058f,-0.001153f,0.000000f,0.000874f,0.000044f,0.000036f},
-//   {0.000787f,-0.000039f,0.000000f,0.000443f,0.008870f,0.000090f,0.001153f,-0.000058f,0.000000f,0.000044f,0.000874f,0.000090f},
-//   {0.000085f,-0.000034f,0.000000f,0.000385f,0.000962f,0.001458f,0.000125f,-0.000050f,0.000000f,0.000038f,0.000095f,0.001472f},
-// };
 static float K[NU][NXt] = {
-  {0.000000f,-0.000000f,3.101918f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.513539f,0.000000f,0.000000f,0.000000f},
-  {0.004102f,-0.082166f,0.000000f,0.155917f,0.007783f,0.000358f,0.001850f,-0.037060f,0.000000f,0.008372f,0.000418f,0.000359f},
-  {0.082164f,-0.004102f,0.000000f,0.007783f,0.155913f,0.000896f,0.037059f,-0.001850f,0.000000f,0.000418f,0.008372f,0.000897f},
-  {0.008879f,-0.003551f,0.000000f,0.006738f,0.016849f,0.014611f,0.004005f,-0.001601f,0.000000f,0.000362f,0.000905f,0.014626f},
+  {0.000000f,0.000000f,0.689184f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.715675f,0.000000f,0.000000f,0.000000f},
+  {0.000039f,-0.000787f,0.000000f,0.008870f,0.000443f,0.000036f,0.000058f,-0.001153f,0.000000f,0.000874f,0.000044f,0.000036f},
+  {0.000787f,-0.000039f,0.000000f,0.000443f,0.008870f,0.000090f,0.001153f,-0.000058f,0.000000f,0.000044f,0.000874f,0.000090f},
+  {0.000085f,-0.000034f,0.000000f,0.000385f,0.000962f,0.001458f,0.000125f,-0.000050f,0.000000f,0.000038f,0.000095f,0.001472f},
 };
 
 static float x_error[NXt];  
@@ -97,23 +91,23 @@ bool controllerOutOfTreeTest() {
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
   // Control frequency
-  if (!RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
+  if (!RATE_DO_EXECUTE(RATE_50_HZ, tick)) {
     return;
   }
   // Positon error, [m]
-  x_error[0] = state->position.x - 0*setpoint->position.x;
-  x_error[1] = state->position.y - 0*setpoint->position.y;
+  x_error[0] = state->position.x - 1*setpoint->position.x;
+  x_error[1] = state->position.y - 1*setpoint->position.y;
   x_error[2] = state->position.z - setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x_error[6] = state->velocity.x - 0*setpoint->velocity.x;
-  x_error[7] = state->velocity.y - 0*setpoint->velocity.y;
+  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
+  x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  x_error[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
-  x_error[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
+  x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
+  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
 
   struct quat attitude_g = qeye();  // goal attitude
   // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
@@ -158,3 +152,97 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   control->controlMode = controlModeForceTorque;
 }
+
+/**
+ * Tunning variables for the full state quaternion LQR controller
+ */
+PARAM_GROUP_START(ctrlLQR)
+/**
+ * @brief K gain
+ */
+PARAM_ADD(PARAM_FLOAT, k11, &K[0][0])
+PARAM_ADD(PARAM_FLOAT, k21, &K[1][0])
+PARAM_ADD(PARAM_FLOAT, k31, &K[2][0])
+PARAM_ADD(PARAM_FLOAT, k41, &K[3][0])
+
+PARAM_ADD(PARAM_FLOAT, k12, &K[0][1])
+PARAM_ADD(PARAM_FLOAT, k22, &K[1][1])
+PARAM_ADD(PARAM_FLOAT, k32, &K[2][1])
+PARAM_ADD(PARAM_FLOAT, k42, &K[3][1])
+
+PARAM_ADD(PARAM_FLOAT, k13, &K[0][2])
+PARAM_ADD(PARAM_FLOAT, k23, &K[1][2])
+PARAM_ADD(PARAM_FLOAT, k33, &K[2][2])
+PARAM_ADD(PARAM_FLOAT, k43, &K[3][2])
+
+PARAM_ADD(PARAM_FLOAT, k14, &K[0][3])
+PARAM_ADD(PARAM_FLOAT, k24, &K[1][3])
+PARAM_ADD(PARAM_FLOAT, k34, &K[2][3])
+PARAM_ADD(PARAM_FLOAT, k44, &K[3][3])
+
+PARAM_ADD(PARAM_FLOAT, k15, &K[0][4])
+PARAM_ADD(PARAM_FLOAT, k25, &K[1][4])
+PARAM_ADD(PARAM_FLOAT, k35, &K[2][4])
+PARAM_ADD(PARAM_FLOAT, k45, &K[3][4])
+
+PARAM_ADD(PARAM_FLOAT, k16, &K[0][5])
+PARAM_ADD(PARAM_FLOAT, k26, &K[1][5])
+PARAM_ADD(PARAM_FLOAT, k36, &K[2][5])
+PARAM_ADD(PARAM_FLOAT, k46, &K[3][5])
+
+PARAM_ADD(PARAM_FLOAT, k17, &K[0][6])
+PARAM_ADD(PARAM_FLOAT, k27, &K[1][6])
+PARAM_ADD(PARAM_FLOAT, k37, &K[2][6])
+PARAM_ADD(PARAM_FLOAT, k47, &K[3][6])
+
+PARAM_ADD(PARAM_FLOAT, k18, &K[0][7])
+PARAM_ADD(PARAM_FLOAT, k28, &K[1][7])
+PARAM_ADD(PARAM_FLOAT, k38, &K[2][7])
+PARAM_ADD(PARAM_FLOAT, k48, &K[3][7])
+
+PARAM_ADD(PARAM_FLOAT, k19, &K[0][8])
+PARAM_ADD(PARAM_FLOAT, k29, &K[1][8])
+PARAM_ADD(PARAM_FLOAT, k39, &K[2][8])
+PARAM_ADD(PARAM_FLOAT, k49, &K[3][8])
+
+PARAM_ADD(PARAM_FLOAT, k110, &K[0][9])
+PARAM_ADD(PARAM_FLOAT, k210, &K[1][9])
+PARAM_ADD(PARAM_FLOAT, k310, &K[2][9])
+PARAM_ADD(PARAM_FLOAT, k410, &K[3][9])
+
+PARAM_ADD(PARAM_FLOAT, k111, &K[0][10])
+PARAM_ADD(PARAM_FLOAT, k211, &K[1][10])
+PARAM_ADD(PARAM_FLOAT, k311, &K[2][10])
+PARAM_ADD(PARAM_FLOAT, k411, &K[3][10])
+
+PARAM_ADD(PARAM_FLOAT, k112, &K[0][11])
+PARAM_ADD(PARAM_FLOAT, k212, &K[1][11])
+PARAM_ADD(PARAM_FLOAT, k312, &K[2][11])
+PARAM_ADD(PARAM_FLOAT, k412, &K[3][11])
+
+PARAM_GROUP_STOP(ctrlLQR)
+
+/**
+ * Logging variables for the command and reference signals for the
+ * LQR controller
+ */
+
+LOG_GROUP_START(ctrlLQR)
+
+LOG_ADD(LOG_FLOAT, e_x, &x_error[0])
+LOG_ADD(LOG_FLOAT, e_y, &x_error[1])
+LOG_ADD(LOG_FLOAT, e_z, &x_error[2])
+
+LOG_ADD(LOG_FLOAT, e_roll,  &x_error[3])
+LOG_ADD(LOG_FLOAT, e_pitch, &x_error[4])
+LOG_ADD(LOG_FLOAT, e_yaw,   &x_error[5])
+
+LOG_ADD(LOG_FLOAT, e_vx, &x_error[6])
+LOG_ADD(LOG_FLOAT, e_vy, &x_error[7])
+LOG_ADD(LOG_FLOAT, e_vz, &x_error[8])
+
+LOG_ADD(LOG_FLOAT, e_vroll,  &x_error[9])
+LOG_ADD(LOG_FLOAT, e_vpitch, &x_error[10])
+LOG_ADD(LOG_FLOAT, e_vyaw,   &x_error[11])
+
+LOG_GROUP_STOP(ctrlLQR)
