@@ -70,10 +70,10 @@ void appMain() {
 //   {0.000085f,-0.000034f,0.000000f,0.000385f,0.000962f,0.001458f,0.000125f,-0.000050f,0.000000f,0.000038f,0.000095f,0.001472f},
 // };
 static float K[NU][NXt] = {
-  {0.000000f,0.000000f,0.985571f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.387757f,0.000000f,0.000000f,0.000000f},
-  {0.001300f,-0.026052f,0.000000f,0.112084f,0.005595f,0.000358f,0.000954f,-0.019119f,0.000000f,0.008350f,0.000417f,0.000359f},
-  {0.026051f,-0.001300f,0.000000f,0.005595f,0.112082f,0.000896f,0.019118f,-0.000954f,0.000000f,0.000417f,0.008350f,0.000897f},
-  {0.002815f,-0.001126f,0.000000f,0.004844f,0.012112f,0.014611f,0.002066f,-0.000826f,0.000000f,0.000361f,0.000902f,0.014626f},
+  {0.000000f,-0.000000f,3.101918f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.513539f,0.000000f,0.000000f,0.000000f},
+  {0.004102f,-0.082166f,0.000000f,0.155917f,0.007783f,0.000358f,0.001850f,-0.037060f,0.000000f,0.008372f,0.000418f,0.000359f},
+  {0.082164f,-0.004102f,0.000000f,0.007783f,0.155913f,0.000896f,0.037059f,-0.001850f,0.000000f,0.000418f,0.008372f,0.000897f},
+  {0.008879f,-0.003551f,0.000000f,0.006738f,0.016849f,0.014611f,0.004005f,-0.001601f,0.000000f,0.000362f,0.000905f,0.014626f},
 };
 
 static float x_error[NXt];  
@@ -101,22 +101,22 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
   // Positon error, [m]
-  x_error[0] = state->position.x - 1*setpoint->position.x;
-  x_error[1] = state->position.y - 1*setpoint->position.y;
+  x_error[0] = state->position.x - 0*setpoint->position.x;
+  x_error[1] = state->position.y - 0*setpoint->position.y;
   x_error[2] = state->position.z - setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
-  x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
+  x_error[6] = state->velocity.x - 0*setpoint->velocity.x;
+  x_error[7] = state->velocity.y - 0*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
-  x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
+  x_error[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
+  x_error[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
+  x_error[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
 
-  // struct quat attitude_g = qeye();  // goal attitude
-  struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
+  struct quat attitude_g = qeye();  // goal attitude
+  // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
   struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,

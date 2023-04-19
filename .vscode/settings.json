@@ -5,6 +5,11 @@
         "**/bower_components": true
     },
     "files.associations": {
-        "bootloader.h": "c"
+        "bootloader.h": "c",
+        "position_controller.h": "c",
+        "controller_mellinger.h": "c",
+        "param.h": "c",
+        "log.h": "c",
+        "physicalconstants.h": "c"
     }
 }
