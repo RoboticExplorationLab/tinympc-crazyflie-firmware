@@ -63,11 +63,17 @@ void appMain() {
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
 #define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z]
 
+// static float K[NU][NXt] = {
+//   {0.000000f,0.000000f,0.689184f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.715675f,0.000000f,0.000000f,0.000000f},
+//   {0.000039f,-0.000787f,0.000000f,0.008870f,0.000443f,0.000036f,0.000058f,-0.001153f,0.000000f,0.000874f,0.000044f,0.000036f},
+//   {0.000787f,-0.000039f,0.000000f,0.000443f,0.008870f,0.000090f,0.001153f,-0.000058f,0.000000f,0.000044f,0.000874f,0.000090f},
+//   {0.000085f,-0.000034f,0.000000f,0.000385f,0.000962f,0.001458f,0.000125f,-0.000050f,0.000000f,0.000038f,0.000095f,0.001472f},
+// };
 static float K[NU][NXt] = {
-  {0.000000f,0.000000f,0.689184f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.715675f,0.000000f,0.000000f,0.000000f},
-  {0.000039f,-0.000787f,0.000000f,0.008870f,0.000443f,0.000036f,0.000058f,-0.001153f,0.000000f,0.000874f,0.000044f,0.000036f},
-  {0.000787f,-0.000039f,0.000000f,0.000443f,0.008870f,0.000090f,0.001153f,-0.000058f,0.000000f,0.000044f,0.000874f,0.000090f},
-  {0.000085f,-0.000034f,0.000000f,0.000385f,0.000962f,0.001458f,0.000125f,-0.000050f,0.000000f,0.000038f,0.000095f,0.001472f},
+  {0.000000f,0.000000f,0.985571f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.387757f,0.000000f,0.000000f,0.000000f},
+  {0.001300f,-0.026052f,0.000000f,0.112084f,0.005595f,0.000358f,0.000954f,-0.019119f,0.000000f,0.008350f,0.000417f,0.000359f},
+  {0.026051f,-0.001300f,0.000000f,0.005595f,0.112082f,0.000896f,0.019118f,-0.000954f,0.000000f,0.000417f,0.008350f,0.000897f},
+  {0.002815f,-0.001126f,0.000000f,0.004844f,0.012112f,0.014611f,0.002066f,-0.000826f,0.000000f,0.000361f,0.000902f,0.014626f},
 };
 
 static float x_error[NXt];  
@@ -91,7 +97,7 @@ bool controllerOutOfTreeTest() {
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
   // Control frequency
-  if (!RATE_DO_EXECUTE(RATE_50_HZ, tick)) {
+  if (!RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
     return;
   }
   // Positon error, [m]
@@ -100,16 +106,17 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x_error[2] = state->position.z - setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x_error[6] = state->velocity.x - 0*setpoint->velocity.x;
-  x_error[7] = state->velocity.y - 0*setpoint->velocity.y;
-  x_error[8] = state->velocity.z - 0*setpoint->velocity.z;
+  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
+  x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
+  x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  x_error[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
-  x_error[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
+  x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
+  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
 
-  struct quat attitude_g = qeye();  // goal attitude
+  // struct quat attitude_g = qeye();  // goal attitude
+  struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
   struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
