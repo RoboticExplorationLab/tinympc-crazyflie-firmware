@@ -109,8 +109,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
   x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
 
-  struct quat attitude_g = qeye();  // goal attitude
-  // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
+  // struct quat attitude_g = qeye();  // goal attitude
+  struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
+  
   struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
