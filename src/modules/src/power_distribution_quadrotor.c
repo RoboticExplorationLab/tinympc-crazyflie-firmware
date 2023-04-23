@@ -47,6 +47,7 @@ static float thrustToTorque = 0.005964552f;
 // thrust = a * pwm^2 + b * pwm
 static float pwmToThrustA = 0.091492681f;
 static float pwmToThrustB = 0.067673604f;
+static float pwmtoThrustBS = UINT16_MAX * 0.067673604f;
 
 int powerDistributionMotorType(uint32_t id)
 {
@@ -112,6 +113,32 @@ static void powerDistributionForceTorque(const control_t *control, motors_thrust
   }
 }
 
+// Scale Force/Torque to UINT16_MAX * Newton
+static void powerDistributionForceTorqueScaled(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {
+  static float motorForces[STABILIZER_NR_OF_MOTORS];
+
+  const float arm = 0.707106781f * armLength;  // sqrt(2) * armLength
+  const float rollPart = 0.25f / arm * control->torqueX;
+  const float pitchPart = 0.25f / arm * control->torqueY;
+  const float thrustPart = 0.25f * control->thrustSi; // N (per rotor)
+  const float yawPart = 0.25f * control->torqueZ / thrustToTorque;
+
+  motorForces[0] = thrustPart - rollPart - pitchPart - yawPart;
+  motorForces[1] = thrustPart - rollPart + pitchPart + yawPart;
+  motorForces[2] = thrustPart + rollPart + pitchPart - yawPart;
+  motorForces[3] = thrustPart + rollPart - pitchPart + yawPart;
+
+  for (int motorIndex = 0; motorIndex < STABILIZER_NR_OF_MOTORS; motorIndex++) {
+    float motorForce = motorForces[motorIndex];
+    if (motorForce < 0.0f) {
+      motorForce = 0.0f;
+    }
+
+    float motor_pwm = (-pwmtoThrustBS  + sqrtf(pwmtoThrustBS * pwmtoThrustBS + 4.0f * pwmToThrustA * motorForce * UINT16_MAX)) / (2.0f * pwmToThrustA);  // quadratic formula
+    motorThrustUncapped->list[motorIndex] = motor_pwm;
+  }
+}
+
 static void powerDistributionForce(const control_t *control, motors_thrust_uncapped_t* motorThrustUncapped) {
   // Not implemented yet
 }
@@ -124,6 +151,9 @@ void powerDistribution(const control_t *control, motors_thrust_uncapped_t* motor
       break;
     case controlModeForceTorque:
       powerDistributionForceTorque(control, motorThrustUncapped);
+      break;
+    case controlModeForceTorqueScaled:
+      powerDistributionForceTorqueScaled(control, motorThrustUncapped);
       break;
     case controlModeForce:
       powerDistributionForce(control, motorThrustUncapped);

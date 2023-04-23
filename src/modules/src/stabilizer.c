@@ -440,7 +440,15 @@ LOG_ADD_CORE(LOG_FLOAT, pitch, &setpoint.attitude.pitch)
 /**
  * @brief Desired attitude rate, yaw rate [deg/s]
  */
-LOG_ADD_CORE(LOG_FLOAT, yaw, &setpoint.attitudeRate.yaw)
+LOG_ADD_CORE(LOG_FLOAT, yaw, &setpoint.attitude.yaw)  // CHANGED from yaw rate
+
+/**
+ * @brief Desired attitude quaternion
+ */
+LOG_ADD_CORE(LOG_FLOAT, qx, &setpoint.attitudeQuaternion.x)
+LOG_ADD_CORE(LOG_FLOAT, qy, &setpoint.attitudeQuaternion.y)
+LOG_ADD_CORE(LOG_FLOAT, qz, &setpoint.attitudeQuaternion.z)
+LOG_ADD_CORE(LOG_FLOAT, qw, &setpoint.attitudeQuaternion.w)
 LOG_GROUP_STOP(ctrltarget)
 
 /**

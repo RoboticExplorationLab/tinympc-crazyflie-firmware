@@ -61,15 +61,22 @@ void appMain() {
 
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
-#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z]
+#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
 #define LQR_RATE RATE_50_HZ  // control frequency
 
 static float K[NU][NXt] = {
-  {0.000000f,0.000000f,0.763388f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.789927f,0.000000f,0.000000f,0.000000f},
-  {0.000037f,-0.000780f,0.000000f,0.009752f,0.000469f,0.000064f,0.000057f,-0.001177f,0.000000f,0.000876f,0.000042f,0.000015f},
-  {0.000777f,-0.000037f,0.000000f,0.000469f,0.009716f,0.000161f,0.001172f,-0.000057f,0.000000f,0.000042f,0.000873f,0.000036f},
-  {0.000028f,-0.000011f,0.000000f,0.000149f,0.000374f,0.002703f,0.000043f,-0.000017f,0.000000f,0.000015f,0.000037f,0.000610f},
+  {0.000035f,-0.000679f,57482.302130f,0.000785f,0.000253f,0.002147f,0.000035f,-0.000529f,18319.174284f,0.000004f,0.000002f,0.000012f},
+  {2.581789f,-51.966388f,0.000001f,487.167683f,24.209643f,4.253406f,2.576450f,-51.852554f,0.000000f,56.757197f,2.821297f,2.173380f},
+  {51.939594f,-2.582113f,0.000036f,24.212410f,486.926540f,10.671459f,51.826328f,-2.576761f,0.000004f,2.821732f,56.730345f,5.452089f},
+  {5.291073f,-2.115866f,0.000004f,19.886402f,49.728742f,179.453785f,5.285888f,-2.113803f,0.000000f,2.323237f,5.809476f,91.626920f},
 };
+
+// static float K[NU][NXt] = {
+//   {-0.000001f,0.000009f,52653.331606f,-0.000038f,-0.000003f,0.000007f,-0.000001f,0.000006f,29655.145945f,-0.000000f,-0.000000f,0.000000f},
+//   {4.784756f,-101.152975f,0.000000f,659.527909f,31.294875f,1.926459f,4.581155f,-96.739384f,0.000000f,57.083180f,2.717272f,1.009751f},
+//   {100.807059f,-4.790179f,-0.000000f,31.328106f,657.393357f,5.037699f,96.414917f,-4.586228f,0.000000f,2.719971f,56.909347f,2.635135f},
+//   {6.291231f,-2.509466f,-0.000000f,16.983842f,42.568022f,117.292930f,6.097435f,-2.432383f,-0.000000f,1.528248f,3.829450f,60.536232f},
+// };
 
 static float x_error[NXt];  
 static float control_input[NU];
@@ -96,22 +103,30 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
   // Positon error, [m]
-  x_error[0] = state->position.x - 0*setpoint->position.x;
-  x_error[1] = state->position.y - 0*setpoint->position.y;
-  x_error[2] = state->position.z - setpoint->position.z;
+  x_error[0] = state->position.x - 1*setpoint->position.x;
+  x_error[1] = state->position.y - 1*setpoint->position.y;
+  x_error[2] = state->position.z - 1*setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x_error[6] = state->velocity.x - 0*setpoint->velocity.x;
-  x_error[7] = state->velocity.y - 0*setpoint->velocity.y;
-  x_error[8] = state->velocity.z - 0*setpoint->velocity.z;
+  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
+  x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
+  x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  x_error[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
-  x_error[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
+  x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
+  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
 
-  struct quat attitude_g = qeye();  // goal attitude
-  // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, setpoint->attitudeQuaternion.y, setpoint->attitudeQuaternion.z, setpoint->attitudeQuaternion.w);
+  // struct quat attitude_g = qeye();  // goal attitude
+  // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, 
+  //                                 setpoint->attitudeQuaternion.y, 
+  //                                 setpoint->attitudeQuaternion.z, 
+  //                                 setpoint->attitudeQuaternion.w);  // do not have quat cmd
+
+  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                 radians(setpoint->attitude.pitch), 
+                                 radians(setpoint->attitude.yaw));
+  struct quat attitude_g = rpy2quat(desired_rpy);
 
   struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
@@ -138,7 +153,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
 
   // Compensate for gravity 
-  control_input[0] += setpoint->thrust + CF_MASS * GRAVITY_MAGNITUDE;  
+  control_input[0] += (setpoint->thrust + CF_MASS * GRAVITY_MAGNITUDE) * UINT16_MAX;
 
   if (setpoint->mode.z == modeDisable) {
     control->thrustSi = 0.0f;
@@ -146,14 +161,20 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->torque[1] =  0.0f;
     control->torque[2] =  0.0f;
   } else {
-    control->thrustSi = control_input[0];  // [N]
+    control->thrustSi = control_input[0];  // [UINT16_MAX * N]
     control->torqueX = control_input[1];   // [N.m]
     control->torqueY = control_input[2];
     control->torqueZ = control_input[3];
   } 
+  control->controlMode = controlModeForceTorqueScaled;
+  
   // DEBUG_PRINT("%d.%.6d", (int)K[0][2], (int)((K[0][2]-(int)K[0][2])*1000000));
   // DEBUG_PRINT("K[0][2] = %f",(double)K[0][2]);
-  control->controlMode = controlModeForceTorque;
+
+  // control->thrustSi = 0.0f;
+  // control->torque[0] =  0.0f;
+  // control->torque[1] =  0.0f;
+  // control->torque[2] =  0.0f;  
 }
 
 /**
