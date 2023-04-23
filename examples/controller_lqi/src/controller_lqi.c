@@ -161,7 +161,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
 
   // Compensate for gravity 
-  control_input[0] += (setpoint->thrust + CF_MASS * GRAVITY_MAGNITUDE) * UINT16_MAX;
+  control_input[0] += (setpoint->thrust + 0.03f * GRAVITY_MAGNITUDE) * UINT16_MAX;
 
   if (setpoint->mode.z == modeDisable) {
     control->thrustSi = 0.0f;
