@@ -10,6 +10,7 @@
         "controller_mellinger.h": "c",
         "param.h": "c",
         "log.h": "c",
-        "physicalconstants.h": "c"
+        "physicalconstants.h": "c",
+        "kbuild": "c"
     }
 }

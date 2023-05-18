@@ -1,0 +1,3 @@
+obj-y += src/
+obj-y += TinyMPC-ADMM/src/tinympc
+obj-y += TinyMPC-ADMM/ext/slap/src/slap
