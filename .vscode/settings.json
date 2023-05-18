@@ -11,6 +11,15 @@
         "param.h": "c",
         "log.h": "c",
         "physicalconstants.h": "c",
-        "kbuild": "c"
+        "kbuild": "c",
+        "debug.h": "c",
+        "tinympc.h": "c",
+        "types.h": "c",
+        "constants.h": "c",
+        "utils.h": "c",
+        "math3d.h": "c",
+        "constraint_linear.h": "c",
+        "lqr.h": "c",
+        "errors.h": "c"
     }
 }

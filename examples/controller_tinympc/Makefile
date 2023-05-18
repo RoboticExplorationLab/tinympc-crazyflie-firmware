@@ -17,8 +17,11 @@ CRAZYFLIE_BASE := ../..
 #
 # To include header files from other directories
 #
+EXTRA_CFLAGS += -lc
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/slap/src
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/src
+EXTRA_CFLAGS += -DSLAP_FLOAT=float
+
 
 #
 # We override the default OOT_CONFIG here, we could also name our config

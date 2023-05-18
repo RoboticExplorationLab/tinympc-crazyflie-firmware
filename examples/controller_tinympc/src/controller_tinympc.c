@@ -41,7 +41,8 @@
 #include "param.h"
 #include "num.h"
 #include "math3d.h"
-// #include "TinyMPC-ADMM/src/tinympc/tinympc.h"
+#include "slap/slap.h"
+#include "tinympc/tinympc.h"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "CONTROLLER_TINYMPC"
@@ -58,27 +59,157 @@ void appMain() {
   }
 }
 
-#define NX  13  // no. state variables        [position (3), attitude (4), body velocity (3), angular rate (3)]
-#define NXt 13  // no. augmented error        [position (3), attitude (3), body velocity (3), angular rate (3), integral (3)]
-#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
+// Macro variables
+#define H 0.02       // dt
+#define NSTATES 12   // no. of states (error state)
+#define NINPUTS 4    // no. of controls
+#define NHORIZON 5  // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NSIM 150     // simulation steps (fixed with reference data)
 #define LQR_RATE RATE_50_HZ  // control frequency
 
-// static float K[NU][NXt] = {
-//   {0.000005f,-0.000140f,52653.331642f,0.000451f,0.000116f,0.000004f,0.000011f,-0.000092f,29655.145947f,0.000002f,0.000001f,0.000000f,25000.0f},
-//   {4.994163f,-102.003187f,-0.000009f,664.757240f,32.583295f,3.411040f,4.777267f,-97.535743f,-0.000001f,57.508688f,2.822074f,1.752151f,0.0f},
-//   {101.840667f,-4.996583f,-0.000122f,32.599051f,663.753591f,8.635494f,97.383191f,-4.779672f,-0.000007f,2.823372f,57.426884f,4.434289f,0.0f},
-//   {8.926535f,-3.567274f,-0.000010f,23.538639f,58.898015f,157.340335f,8.573598f,-3.426313f,-0.000001f,2.062858f,5.161323f,80.567476f,0.0f},
-// };
+/* Start MPC initialization*/
 
-static float K[NU][NXt] = {
-  {-0.000001f,0.000009f,52653.331606f,-0.000038f,-0.000003f,0.000007f,-0.000001f,0.000006f,29655.145945f,-0.000000f,-0.000000f,0.000000f,25000.0f},
-  {4.784756f,-101.152975f,0.000000f,659.527909f,31.294875f,1.926459f,4.581155f,-96.739384f,0.000000f,57.083180f,2.717272f,1.009751f,0.0f},
-  {100.807059f,-4.790179f,-0.000000f,31.328106f,657.393357f,5.037699f,96.414917f,-4.586228f,0.000000f,2.719971f,56.909347f,2.635135f,0.0f},
-  {6.291231f,-2.509466f,-0.000000f,16.983842f,42.568022f,117.292930f,6.097435f,-2.432383f,-0.000000f,1.528248f,3.829450f,60.536232f,0.0f},
+// Create data array 
+// static sfloat x0_data[NSTATES] = {0, 1, 1, 1, 0, 0,
+                          //  0, 0, 0, 0, 0, 0};  // initial state
+static sfloat x0_data[NSTATES] = {0, 1, 1, 0.7, 0.7, 0,
+                            0, 0, 0, 0, 0, 0};  // initial state
+static sfloat xg_data[NSTATES] = {0};  
+static sfloat ug_data[NINPUTS] = {0};      // goal input if needed
+static sfloat Xhrz_data[NSTATES * NHORIZON] = {0};      // save X for one horizon
+static sfloat X_data[NSTATES * NSIM] = {0};             // save X for the whole run
+static sfloat Uhrz_data[NINPUTS * (NHORIZON - 1)] = {0};
+static sfloat A_data[NSTATES * NSTATES] = {
+    1.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 1.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  1.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, -0.003924f, 0.000000f, 1.000000f, 0.000000f, 0.000000f,
+    0.000000f, -0.392400f, 0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.003924f, 0.000000f,  0.000000f, 0.000000f, 1.000000f, 0.000000f,
+    0.392400f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 1.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.020000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    1.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.020000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 1.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.020000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, 0.000000f,  1.000000f, 0.000000f, 0.000000f, 0.000000f,
+    0.000000f, -0.000013f, 0.000000f, 0.010000f, 0.000000f, 0.000000f,
+    0.000000f, -0.001962f, 0.000000f, 1.000000f, 0.000000f, 0.000000f,
+    0.000013f, 0.000000f,  0.000000f, 0.000000f, 0.010000f, 0.000000f,
+    0.001962f, 0.000000f,  0.000000f, 0.000000f, 1.000000f, 0.000000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.010000f,
+    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 1.000000f,
 };
+static sfloat B_data[NSTATES * NINPUTS] = {
+    -0.000019f, -0.000001f, 0.000981f, 0.001264f,  -0.029414f, 0.004771f,
+    -0.003847f, -0.000165f, 0.098100f, 0.252748f,  -5.882783f, 0.954290f,
+    -0.000001f, -0.000019f, 0.000981f, 0.029044f,  -0.001057f, -0.003644f,
+    -0.000138f, -0.003799f, 0.098100f, 5.808852f,  -0.211410f, -0.728857f,
+    0.000019f,  0.000001f,  0.000981f, -0.001493f, 0.028771f,  0.001265f,
+    0.003763f,  0.000195f,  0.098100f, -0.298680f, 5.754175f,  0.252942f,
+    0.000001f,  0.000019f,  0.000981f, -0.028815f, 0.001700f,  -0.002392f,
+    0.000222f,  0.003769f,  0.098100f, -5.762921f, 0.340018f,  -0.478376f,
+};
+static sfloat f_data[NSTATES] = {0};
+static sfloat Kinf_data[NINPUTS*NSTATES] = {
+  -0.204719f,-0.035010f,0.298543f,-0.058814f,
+  -0.006771f,-0.233680f,-0.030598f,0.271050f,
+  1.394464f,1.394464f,1.394464f,1.394464f,
+  0.033636f,1.065312f,0.142948f,-1.241896f,
+  -0.928855f,-0.166981f,1.372039f,-0.276202f,
+  0.266463f,-0.269349f,0.275893f,-0.273007f,
+  -0.153553f,-0.026797f,0.225082f,-0.044732f,
+  -0.005271f,-0.175610f,-0.023223f,0.204104f,
+  0.580173f,0.580173f,0.580173f,0.580173f,
+  0.002878f,0.083979f,0.011550f,-0.098408f,
+  -0.072860f,-0.013767f,0.109059f,-0.022432f,
+  0.280709f,-0.283762f,0.290688f,-0.287635f,
+};
+static sfloat Pinf_data[NSTATES*NSTATES] = {
+  376.164204f,-0.020264f,-0.000000f,0.089198f,338.786043f,0.080492f,112.737963f,-0.015070f,-0.000000f,0.006606f,1.669946f,0.083527f,
+  -0.020264f,376.151433f,0.000000f,-338.729395f,-0.089198f,-0.032255f,-0.015070f,112.728425f,0.000000f,-1.665752f,-0.006606f,-0.033471f,
+  -0.000000f,0.000000f,208.027074f,-0.000000f,-0.000000f,0.000000f,-0.000000f,0.000000f,16.194993f,0.000000f,-0.000000f,0.000000f,
+  0.089198f,-338.729395f,-0.000000f,1449.708366f,0.402843f,0.151939f,0.066983f,-248.002042f,-0.000000f,7.286598f,0.030505f,0.157838f,
+  338.786043f,-0.089198f,0.000000f,0.402843f,1449.968369f,0.379094f,248.044903f,-0.066983f,0.000000f,0.030505f,7.306424f,0.393812f,
+  0.080492f,-0.032255f,0.000000f,0.151939f,0.379094f,97.767107f,0.061311f,-0.024570f,0.000000f,0.012225f,0.030496f,0.936579f,
+  112.737963f,-0.015070f,-0.000000f,0.066983f,248.044903f,0.061311f,66.921344f,-0.011252f,-0.000000f,0.004991f,1.234055f,0.063631f,
+  -0.015070f,112.728425f,0.000000f,-248.002042f,-0.066983f,-0.024570f,-0.011252f,66.914183f,0.000000f,-1.230856f,-0.004991f,-0.025500f,
+  -0.000000f,0.000000f,16.194993f,-0.000000f,-0.000000f,0.000000f,-0.000000f,0.000000f,7.076044f,-0.000000f,0.000000f,0.000000f,
+  0.006606f,-1.665752f,0.000000f,7.286598f,0.030505f,0.012225f,0.004991f,-1.230856f,0.000000f,1.051781f,0.002432f,0.012870f,
+  1.669946f,-0.006606f,0.000000f,0.030505f,7.306424f,0.030496f,1.234055f,-0.004991f,0.000000f,0.002432f,1.053397f,0.032106f,
+  0.083527f,-0.033471f,0.000000f,0.157838f,0.393812f,0.936579f,0.063631f,-0.025500f,0.000000f,0.012870f,0.032106f,1.481670f,
+};
+static sfloat Quu_inv_data[NINPUTS*NINPUTS] = {
+  0.258936f,0.106184f,0.251217f,0.105341f,
+  0.106184f,0.261898f,0.102398f,0.251199f,
+  0.251217f,0.102398f,0.268936f,0.099128f,
+  0.105341f,0.251199f,0.099128f,0.266011f,
+};
+static sfloat AmBKt_data[NSTATES*NSTATES] = {
+  0.999990f,-0.000000f,0.000000f,0.000000f,0.003881f,0.000000f,0.019993f,-0.000000f,-0.000000f,0.000000f,0.000010f,0.000000f,
+  -0.000000f,0.999990f,0.000000f,-0.003880f,-0.000000f,-0.000000f,-0.000000f,0.019993f,0.000000f,-0.000010f,-0.000000f,-0.000000f,
+  -0.000000f,-0.000000f,0.994528f,0.000000f,0.000000f,0.000000f,-0.000000f,-0.000000f,0.017723f,0.000000f,-0.000000f,0.000000f,
+  0.000027f,0.014560f,-0.000000f,0.933445f,0.000114f,0.000032f,0.000020f,0.010954f,-0.000000f,0.004739f,0.000008f,0.000033f,
+  -0.014548f,-0.000027f,0.000000f,0.000114f,0.933497f,0.000079f,-0.010945f,-0.000020f,0.000000f,0.000008f,0.004743f,0.000082f,
+  0.000331f,-0.000132f,0.000000f,0.000571f,0.001428f,0.996745f,0.000243f,-0.000097f,0.000000f,0.000042f,0.000106f,0.006571f,
+  -0.001903f,-0.000003f,0.000000f,0.000015f,0.383701f,0.000010f,0.998568f,-0.000003f,0.000000f,0.000001f,0.001274f,0.000011f,
+  -0.000003f,-0.001904f,0.000000f,-0.383695f,-0.000015f,-0.000004f,-0.000003f,0.998567f,0.000000f,-0.001274f,-0.000001f,-0.000004f,
+  -0.000000f,-0.000000f,-0.547188f,0.000000f,0.000000f,0.000000f,-0.000000f,-0.000000f,0.772340f,0.000000f,-0.000000f,0.000000f,
+  0.005335f,2.912025f,0.000000f,-13.310992f,0.022809f,0.006349f,0.003906f,2.190721f,-0.000000f,-0.052217f,0.001686f,0.006588f,
+  -2.909586f,-0.005335f,0.000000f,0.022808f,-13.300594f,0.015893f,-2.188937f,-0.003906f,0.000000f,0.001686f,-0.051449f,0.016491f,
+  0.066195f,-0.026455f,0.000000f,0.114111f,0.285517f,-0.650985f,0.048672f,-0.019452f,0.000000f,0.008465f,0.021180f,0.314175f,
+};
+static sfloat coeff_d2p_data[NSTATES*NINPUTS] = {
+  -0.000001f,0.000000f,-0.000000f,-0.000001f,-0.000003f,-0.000879f,-0.000001f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000009f,
+  0.000001f,-0.000000f,-0.000000f,0.000001f,0.000003f,0.000728f,0.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000007f,
+  -0.000000f,0.000000f,-0.000000f,-0.000001f,-0.000002f,-0.000409f,-0.000000f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000004f,
+  0.000000f,0.000000f,-0.000000f,0.000002f,0.000002f,0.000560f,0.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000005f,
+};
+static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0};
+static sfloat p_data[NSTATES * NHORIZON] = {0};
+static sfloat Q_data[NSTATES * NSTATES] = {0};
+static sfloat R_data[NINPUTS * NINPUTS] = {0};
+static sfloat q_data[NSTATES*(NHORIZON-1)] = {0};
+static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0};
+static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0};
 
-static float x_error[NXt] = {0};  
-static float control_input[NU] = {0};
+static sfloat umin_data[NINPUTS] = {0};
+static sfloat umax_data[NINPUTS] = {0};
+// Put constraints on u, x
+static sfloat Acu_data[NINPUTS * NINPUTS] = {0};  
+static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0};
+
+static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0};
+
+// Created matrices
+static Matrix X[NSIM];
+static Matrix Xref[NSIM];
+static Matrix Uref[NSIM - 1];
+static Matrix Xhrz[NHORIZON];
+static Matrix Uhrz[NHORIZON - 1];
+static Matrix d[NHORIZON - 1];
+static Matrix p[NHORIZON];
+static Matrix YU[NHORIZON - 1];
+static Matrix ZU[NHORIZON - 1];
+static Matrix ZU_new[NHORIZON - 1];
+static Matrix q[NHORIZON-1];
+static Matrix r[NHORIZON-1];
+static Matrix r_tilde[NHORIZON-1];
+static Matrix A;
+static Matrix B;
+static Matrix f;
+
+tiny_Model model;
+tiny_AdmmSettings stgs;
+tiny_AdmmData data;
+tiny_AdmmInfo info;
+tiny_AdmmSolution soln;
+tiny_AdmmWorkspace work;
 
 // Struct for logging position information
 static bool isInit = false;
@@ -88,10 +219,58 @@ void controllerOutOfTreeInit(void) {
     return;
   }
 
-  // for (int i = 0; i < NXt; ++i) {
-  //   x_error[i] = 0.0f;
-  // }
+  for (int i = 0; i < NSIM; ++i) {
+    X[i] = slap_MatrixFromArray(NSTATES, 1, &X_data[i * NSTATES]);
+  }
 
+  /* Create TinyMPC struct and problem data*/
+  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, 0.02);
+  tiny_InitSettings(&stgs);
+  stgs.rho_init = 1e0;  // Important (select offline, associated with precomp.)
+  tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
+  
+  // Fill in the remaining struct 
+  // T_INIT_ZEROS(temp_data);
+  tiny_InitWorkspaceTempData(&work, ZU, ZU_new, 0, 0, temp_data);
+  tiny_InitPrimalCache(&work, Quu_inv_data, AmBKt_data, coeff_d2p_data);
+
+  tiny_InitModelFromArray(&model, &A, &B, &f, A_data, B_data, f_data);
+  tiny_InitSolnTrajFromArray(&work, Xhrz, Uhrz, Xhrz_data, Uhrz_data);
+  tiny_InitSolnGainsFromArray(&work, d, p, d_data, p_data, Kinf_data, Pinf_data);
+  tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
+
+  tiny_SetInitialState(&work, x0_data);  
+  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+
+  /* Set up LQR cost */
+  tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
+  // slap_SetIdentity(prob.Q, 1000e-1);
+  sfloat Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 0.1, 0.1, 0.1};
+  slap_SetDiagonal(data.Q, Qdiag, NSTATES);
+  slap_SetIdentity(data.R, 1);
+  slap_AddIdentity(data.R, work.rho); // \tilde{R}
+  tiny_InitDataLinearCostFromArray(&work, q, r, r_tilde, q_data, r_data, r_tilde_data);
+
+  /* Set up constraints */
+  tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
+  slap_SetConst(data.ucu, 0.3);
+  slap_SetConst(data.lcu, -0.3);
+
+  tiny_UpdateLinearCost(&work);
+  /* Solver settings */
+  stgs.en_cstr_goal = 0;
+  stgs.en_cstr_inputs = 1;
+  stgs.en_cstr_states = 0;
+  stgs.max_iter = 100;           // limit this if needed
+  stgs.verbose = 1;
+  stgs.check_termination = 4;
+  stgs.tol_abs_dual = 1e-1;
+  stgs.tol_abs_prim = 1e-2;
+
+  // Absolute formulation:
+  // Warm-starting since horizon data is reused
+  // Stop earlier as horizon exceeds the end
+  MatCpy(X[0], work.data->x0);  
   isInit = true;
 }
 
@@ -101,179 +280,5 @@ bool controllerOutOfTreeTest() {
 }
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
-  // Control frequency
-  if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
-    return;
-  }
-  // Positon error, [m]
-  x_error[0] = state->position.x - 1*setpoint->position.x;
-  x_error[1] = state->position.y - 1*setpoint->position.y;
-  x_error[2] = state->position.z - 1*setpoint->position.z;
-
-  // Body velocity error, [m/s]                          
-  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
-  x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
-  x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
-
-  // Angular rate error, [rad/s]
-  x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
-  x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
-
-  // struct quat attitude_g = qeye();  // goal attitude
-  // struct quat attitude_g = mkquat(setpoint->attitudeQuaternion.x, 
-  //                                 setpoint->attitudeQuaternion.y, 
-  //                                 setpoint->attitudeQuaternion.z, 
-  //                                 setpoint->attitudeQuaternion.w);  // do not have quat cmd
-
-  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-                                 radians(setpoint->attitude.pitch), 
-                                 radians(setpoint->attitude.yaw));
-  struct quat attitude_g = rpy2quat(desired_rpy);
-
-  struct quat attitude = mkquat(
-    state->attitudeQuaternion.x,
-    state->attitudeQuaternion.y,
-    state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  // current attitude
-
-  struct quat attitude_gI = qinv(attitude_g);  
-  struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
-  struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
   
-  // Attitude error
-  x_error[3] = phi.x;
-  x_error[4] = phi.y;
-  x_error[5] = phi.z;
-
-  x_error[12] += x_error[2] / LQR_RATE;
-  // x_error[13] += x_error[1] / LQR_RATE;
-  // x_error[14] += x_error[2] / LQR_RATE;
-
-  // Matrix multiplication, compute control input
-  for (int i = 0; i < STABILIZER_NR_OF_MOTORS; i++){
-    control_input[i] = 0;
-
-    for (int j = 0; j < NXt; j++) {
-      control_input[i] += -K[i][j] * x_error[j];
-    }
-  }
-
-  // Compensate for gravity 
-  control_input[0] += (setpoint->thrust + 0.03f * GRAVITY_MAGNITUDE) * UINT16_MAX;
-
-  if (setpoint->mode.z == modeDisable) {
-    control->thrustSi = 0.0f;
-    control->torque[0] =  0.0f;
-    control->torque[1] =  0.0f;
-    control->torque[2] =  0.0f;
-  } else {
-    control->thrustSi = control_input[0];  // [UINT16_MAX * N]
-    control->torqueX = control_input[1];   // [N.m]
-    control->torqueY = control_input[2];
-    control->torqueZ = control_input[3];
-  } 
-  control->controlMode = controlModeForceTorqueScaled;
-  
-  // DEBUG_PRINT("%d.%.6d", (int)K[0][2], (int)((K[0][2]-(int)K[0][2])*1000000));
-  // DEBUG_PRINT("K[0][2] = %f",(double)K[0][2]);
-
-  // control->thrustSi = 0.0f;
-  // control->torque[0] =  0.0f;
-  // control->torque[1] =  0.0f;
-  // control->torque[2] =  0.0f;  
 }
-
-/**
- * Tunning variables for the full state quaternion LQR controller
- */
-PARAM_GROUP_START(ctrlLQR)
-/**
- * @brief K gain
- */
-PARAM_ADD(PARAM_FLOAT, k11, &K[0][0])
-PARAM_ADD(PARAM_FLOAT, k21, &K[1][0])
-PARAM_ADD(PARAM_FLOAT, k31, &K[2][0])
-PARAM_ADD(PARAM_FLOAT, k41, &K[3][0])
-
-PARAM_ADD(PARAM_FLOAT, k12, &K[0][1])
-PARAM_ADD(PARAM_FLOAT, k22, &K[1][1])
-PARAM_ADD(PARAM_FLOAT, k32, &K[2][1])
-PARAM_ADD(PARAM_FLOAT, k42, &K[3][1])
-
-PARAM_ADD(PARAM_FLOAT, k13, &K[0][2])
-PARAM_ADD(PARAM_FLOAT, k23, &K[1][2])
-PARAM_ADD(PARAM_FLOAT, k33, &K[2][2])
-PARAM_ADD(PARAM_FLOAT, k43, &K[3][2])
-
-PARAM_ADD(PARAM_FLOAT, k14, &K[0][3])
-PARAM_ADD(PARAM_FLOAT, k24, &K[1][3])
-PARAM_ADD(PARAM_FLOAT, k34, &K[2][3])
-PARAM_ADD(PARAM_FLOAT, k44, &K[3][3])
-
-PARAM_ADD(PARAM_FLOAT, k15, &K[0][4])
-PARAM_ADD(PARAM_FLOAT, k25, &K[1][4])
-PARAM_ADD(PARAM_FLOAT, k35, &K[2][4])
-PARAM_ADD(PARAM_FLOAT, k45, &K[3][4])
-
-PARAM_ADD(PARAM_FLOAT, k16, &K[0][5])
-PARAM_ADD(PARAM_FLOAT, k26, &K[1][5])
-PARAM_ADD(PARAM_FLOAT, k36, &K[2][5])
-PARAM_ADD(PARAM_FLOAT, k46, &K[3][5])
-
-PARAM_ADD(PARAM_FLOAT, k17, &K[0][6])
-PARAM_ADD(PARAM_FLOAT, k27, &K[1][6])
-PARAM_ADD(PARAM_FLOAT, k37, &K[2][6])
-PARAM_ADD(PARAM_FLOAT, k47, &K[3][6])
-
-PARAM_ADD(PARAM_FLOAT, k18, &K[0][7])
-PARAM_ADD(PARAM_FLOAT, k28, &K[1][7])
-PARAM_ADD(PARAM_FLOAT, k38, &K[2][7])
-PARAM_ADD(PARAM_FLOAT, k48, &K[3][7])
-
-PARAM_ADD(PARAM_FLOAT, k19, &K[0][8])
-PARAM_ADD(PARAM_FLOAT, k29, &K[1][8])
-PARAM_ADD(PARAM_FLOAT, k39, &K[2][8])
-PARAM_ADD(PARAM_FLOAT, k49, &K[3][8])
-
-PARAM_ADD(PARAM_FLOAT, k110, &K[0][9])
-PARAM_ADD(PARAM_FLOAT, k210, &K[1][9])
-PARAM_ADD(PARAM_FLOAT, k310, &K[2][9])
-PARAM_ADD(PARAM_FLOAT, k410, &K[3][9])
-
-PARAM_ADD(PARAM_FLOAT, k111, &K[0][10])
-PARAM_ADD(PARAM_FLOAT, k211, &K[1][10])
-PARAM_ADD(PARAM_FLOAT, k311, &K[2][10])
-PARAM_ADD(PARAM_FLOAT, k411, &K[3][10])
-
-PARAM_ADD(PARAM_FLOAT, k112, &K[0][11])
-PARAM_ADD(PARAM_FLOAT, k212, &K[1][11])
-PARAM_ADD(PARAM_FLOAT, k312, &K[2][11])
-PARAM_ADD(PARAM_FLOAT, k412, &K[3][11])
-
-PARAM_GROUP_STOP(ctrlLQR)
-
-/**
- * Logging variables for the command and reference signals for the
- * LQR controller
- */
-
-LOG_GROUP_START(ctrlLQR)
-
-LOG_ADD(LOG_FLOAT, e_x, &x_error[0])
-LOG_ADD(LOG_FLOAT, e_y, &x_error[1])
-LOG_ADD(LOG_FLOAT, e_z, &x_error[2])
-
-LOG_ADD(LOG_FLOAT, e_roll,  &x_error[3])
-LOG_ADD(LOG_FLOAT, e_pitch, &x_error[4])
-LOG_ADD(LOG_FLOAT, e_yaw,   &x_error[5])
-
-LOG_ADD(LOG_FLOAT, e_vx, &x_error[6])
-LOG_ADD(LOG_FLOAT, e_vy, &x_error[7])
-LOG_ADD(LOG_FLOAT, e_vz, &x_error[8])
-
-LOG_ADD(LOG_FLOAT, e_vroll,  &x_error[9])
-LOG_ADD(LOG_FLOAT, e_vpitch, &x_error[10])
-LOG_ADD(LOG_FLOAT, e_vyaw,   &x_error[11])
-
-LOG_GROUP_STOP(ctrlLQR)
