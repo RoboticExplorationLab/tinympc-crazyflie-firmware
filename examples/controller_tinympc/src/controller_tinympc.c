@@ -60,138 +60,117 @@ void appMain() {
 }
 
 // Macro variables
-#define H 0.02       // dt
-#define NSTATES 12   // no. of states (error state)
-#define NINPUTS 4    // no. of controls
-#define NHORIZON 5  // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define NSIM 150     // simulation steps (fixed with reference data)
-#define LQR_RATE RATE_50_HZ  // control frequency
+#define DT 0.02f       // dt
+#define NSTATES 12    // no. of states (error state)
+#define NINPUTS 4     // no. of controls
+#define NHORIZON 5    // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NRUN 100      // length of reference trajectory
+#define MPC_RATE RATE_50_HZ  // control frequency
 
-/* Start MPC initialization*/
+/* Allocate global variables for MPC */
 
-// Create data array 
-// static sfloat x0_data[NSTATES] = {0, 1, 1, 1, 0, 0,
-                          //  0, 0, 0, 0, 0, 0};  // initial state
-static sfloat x0_data[NSTATES] = {0};  // initial state
-static sfloat xg_data[NSTATES] = {0, 0, 0, 0, 0, 0,
-                            0, 0, 0, 0, 0, 0};  
-static sfloat ug_data[NINPUTS] = {0};      // goal input if needed
-static sfloat Xhrz_data[NSTATES * NHORIZON] = {0};      // save X for one horizon
-static sfloat X_data[NSTATES * NSIM] = {0};             // save X for the whole run
-static sfloat Uhrz_data[NINPUTS * (NHORIZON - 1)] = {0};
-static sfloat A_data[NSTATES * NSTATES] = {
-    1.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 1.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  1.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, -0.003924f, 0.000000f, 1.000000f, 0.000000f, 0.000000f,
-    0.000000f, -0.392400f, 0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.003924f, 0.000000f,  0.000000f, 0.000000f, 1.000000f, 0.000000f,
-    0.392400f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 1.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.020000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    1.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.020000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 1.000000f,  0.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.020000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, 0.000000f,  1.000000f, 0.000000f, 0.000000f, 0.000000f,
-    0.000000f, -0.000013f, 0.000000f, 0.010000f, 0.000000f, 0.000000f,
-    0.000000f, -0.001962f, 0.000000f, 1.000000f, 0.000000f, 0.000000f,
-    0.000013f, 0.000000f,  0.000000f, 0.000000f, 0.010000f, 0.000000f,
-    0.001962f, 0.000000f,  0.000000f, 0.000000f, 1.000000f, 0.000000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 0.010000f,
-    0.000000f, 0.000000f,  0.000000f, 0.000000f, 0.000000f, 1.000000f,
+// Precompute data offline
+sfloat A_data[NSTATES*NSTATES]= {
+  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,-0.003849f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,-0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.003849f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,-0.000013f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,-0.001999f,0.000000f,1.000000f,0.000000f,0.000000f,
+  0.000013f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.001999f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,
+  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
 };
-static sfloat B_data[NSTATES * NINPUTS] = {
-    -0.000019f, -0.000001f, 0.000981f, 0.001264f,  -0.029414f, 0.004771f,
-    -0.003847f, -0.000165f, 0.098100f, 0.252748f,  -5.882783f, 0.954290f,
-    -0.000001f, -0.000019f, 0.000981f, 0.029044f,  -0.001057f, -0.003644f,
-    -0.000138f, -0.003799f, 0.098100f, 5.808852f,  -0.211410f, -0.728857f,
-    0.000019f,  0.000001f,  0.000981f, -0.001493f, 0.028771f,  0.001265f,
-    0.003763f,  0.000195f,  0.098100f, -0.298680f, 5.754175f,  0.252942f,
-    0.000001f,  0.000019f,  0.000981f, -0.028815f, 0.001700f,  -0.002392f,
-    0.000222f,  0.003769f,  0.098100f, -5.762921f, 0.340018f,  -0.478376f,
+sfloat B_data[NSTATES*NINPUTS]= {
+  0.000019f,0.000019f,0.000962f,-0.029620f,0.030207f,-0.004066f,0.004101f,0.004021f,0.096236f,-5.923901f,6.041486f,-0.813298f,
+  -0.000018f,0.000017f,0.000962f,-0.027140f,-0.027503f,0.005295f,-0.003734f,0.003685f,0.096236f,-5.428009f,-5.500535f,1.059020f,
+  -0.000019f,-0.000019f,0.000962f,0.029845f,-0.029577f,-0.001855f,-0.004016f,-0.004052f,0.096236f,5.968959f,-5.915321f,-0.370998f,
+  0.000017f,-0.000017f,0.000962f,0.026915f,0.026872f,0.000626f,0.003648f,-0.003654f,0.096236f,5.382950f,5.374370f,0.125275f,
 };
-static sfloat f_data[NSTATES] = {0};
-static sfloat Kinf_data[NINPUTS*NSTATES] = {
-  -0.204719f,-0.035010f,0.298543f,-0.058814f,
-  -0.006771f,-0.233680f,-0.030598f,0.271050f,
-  1.394464f,1.394464f,1.394464f,1.394464f,
-  0.033636f,1.065312f,0.142948f,-1.241896f,
-  -0.928855f,-0.166981f,1.372039f,-0.276202f,
-  0.266463f,-0.269349f,0.275893f,-0.273007f,
-  -0.153553f,-0.026797f,0.225082f,-0.044732f,
-  -0.005271f,-0.175610f,-0.023223f,0.204104f,
-  0.580173f,0.580173f,0.580173f,0.580173f,
-  0.002878f,0.083979f,0.011550f,-0.098408f,
-  -0.072860f,-0.013767f,0.109059f,-0.022432f,
-  0.280709f,-0.283762f,0.290688f,-0.287635f,
+sfloat f_data[NSTATES] = {0.0f};
+sfloat Kinf_data[NINPUTS*NSTATES] = {
+  0.074926f,-0.087307f,-0.170980f,0.183361f,
+  0.142503f,0.116560f,-0.104167f,-0.154896f,
+  1.397135f,1.397135f,1.397135f,1.397135f,
+  -0.653577f,-0.529393f,0.472648f,0.710322f,
+  0.334850f,-0.391543f,-0.788093f,0.844787f,
+  -0.272398f,0.270565f,-0.275297f,0.277130f,
+  0.055876f,-0.065199f,-0.129091f,0.138415f,
+  0.107376f,0.087484f,-0.078152f,-0.116708f,
+  0.583418f,0.583418f,0.583418f,0.583418f,
+  -0.051908f,-0.041623f,0.037125f,0.056407f,
+  0.025881f,-0.030376f,-0.062909f,0.067404f,
+  -0.287018f,0.285076f,-0.290085f,0.292027f,
 };
-static sfloat Pinf_data[NSTATES*NSTATES] = {
-  376.164204f,-0.020264f,-0.000000f,0.089198f,338.786043f,0.080492f,112.737963f,-0.015070f,-0.000000f,0.006606f,1.669946f,0.083527f,
-  -0.020264f,376.151433f,0.000000f,-338.729395f,-0.089198f,-0.032255f,-0.015070f,112.728425f,0.000000f,-1.665752f,-0.006606f,-0.033471f,
-  -0.000000f,0.000000f,208.027074f,-0.000000f,-0.000000f,0.000000f,-0.000000f,0.000000f,16.194993f,0.000000f,-0.000000f,0.000000f,
-  0.089198f,-338.729395f,-0.000000f,1449.708366f,0.402843f,0.151939f,0.066983f,-248.002042f,-0.000000f,7.286598f,0.030505f,0.157838f,
-  338.786043f,-0.089198f,0.000000f,0.402843f,1449.968369f,0.379094f,248.044903f,-0.066983f,0.000000f,0.030505f,7.306424f,0.393812f,
-  0.080492f,-0.032255f,0.000000f,0.151939f,0.379094f,97.767107f,0.061311f,-0.024570f,0.000000f,0.012225f,0.030496f,0.936579f,
-  112.737963f,-0.015070f,-0.000000f,0.066983f,248.044903f,0.061311f,66.921344f,-0.011252f,-0.000000f,0.004991f,1.234055f,0.063631f,
-  -0.015070f,112.728425f,0.000000f,-248.002042f,-0.066983f,-0.024570f,-0.011252f,66.914183f,0.000000f,-1.230856f,-0.004991f,-0.025500f,
-  -0.000000f,0.000000f,16.194993f,-0.000000f,-0.000000f,0.000000f,-0.000000f,0.000000f,7.076044f,-0.000000f,0.000000f,0.000000f,
-  0.006606f,-1.665752f,0.000000f,7.286598f,0.030505f,0.012225f,0.004991f,-1.230856f,0.000000f,1.051781f,0.002432f,0.012870f,
-  1.669946f,-0.006606f,0.000000f,0.030505f,7.306424f,0.030496f,1.234055f,-0.004991f,0.000000f,0.002432f,1.053397f,0.032106f,
-  0.083527f,-0.033471f,0.000000f,0.157838f,0.393812f,0.936579f,0.063631f,-0.025500f,0.000000f,0.012870f,0.032106f,1.481670f,
+sfloat Pinf_data[NSTATES*NSTATES] = {
+  376.096473f,-0.013921f,0.000000f,0.061321f,338.072148f,0.081573f,112.687691f,-0.010361f,0.000000f,0.004544f,1.647141f,0.084648f,
+  -0.013921f,376.082931f,-0.000000f,-338.012160f,-0.061321f,-0.032658f,-0.010361f,112.677580f,0.000000f,-1.642698f,-0.004544f,-0.033889f,
+  -0.000000f,-0.000000f,208.790813f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000000f,16.505696f,0.000000f,-0.000000f,-0.000000f,
+  0.061321f,-338.012160f,0.000000f,1446.515966f,0.277569f,0.153801f,0.046110f,-247.529765f,0.000000f,7.178445f,0.021058f,0.159773f,
+  338.072148f,-0.061321f,-0.000000f,0.277569f,1446.790778f,0.384124f,247.575126f,-0.046110f,-0.000000f,0.021058f,7.199401f,0.399039f,
+  0.081573f,-0.032658f,-0.000000f,0.153801f,0.384124f,97.779835f,0.062145f,-0.024881f,-0.000000f,0.012386f,0.030932f,0.949901f,
+  112.687691f,-0.010361f,-0.000000f,0.046110f,247.575126f,0.062145f,66.874239f,-0.007743f,-0.000000f,0.003439f,1.217014f,0.064496f,
+  -0.010361f,112.677580f,-0.000000f,-247.529765f,-0.046110f,-0.024881f,-0.007743f,66.866651f,0.000000f,-1.213627f,-0.003439f,-0.025822f,
+  0.000000f,-0.000000f,16.505696f,0.000000f,0.000000f,-0.000000f,0.000000f,-0.000000f,7.227418f,0.000000f,-0.000000f,-0.000000f,
+  0.004544f,-1.642698f,0.000000f,7.178445f,0.021058f,0.012386f,0.003439f,-1.213627f,0.000000f,1.043715f,0.001687f,0.013041f,
+  1.647141f,-0.004544f,-0.000000f,0.021058f,7.199401f,0.030932f,1.217014f,-0.003439f,-0.000000f,0.001687f,1.045421f,0.032567f,
+  0.084648f,-0.033889f,-0.000000f,0.159773f,0.399039f,0.949901f,0.064496f,-0.025822f,-0.000000f,0.013041f,0.032567f,1.495774f,
 };
-static sfloat Quu_inv_data[NINPUTS*NINPUTS] = {
-  0.258936f,0.106184f,0.251217f,0.105341f,
-  0.106184f,0.261898f,0.102398f,0.251199f,
-  0.251217f,0.102398f,0.268936f,0.099128f,
-  0.105341f,0.251199f,0.099128f,0.266011f,
+sfloat Quu_inv_data[NINPUTS*NINPUTS] = {
+  0.172741f,0.050332f,0.167886f,0.047495f,
+  0.050332f,0.171730f,0.049139f,0.167253f,
+  0.167886f,0.049139f,0.175090f,0.046339f,
+  0.047495f,0.167253f,0.046339f,0.177367f,
 };
-static sfloat AmBKt_data[NSTATES*NSTATES] = {
-  0.999990f,-0.000000f,0.000000f,0.000000f,0.003881f,0.000000f,0.019993f,-0.000000f,-0.000000f,0.000000f,0.000010f,0.000000f,
-  -0.000000f,0.999990f,0.000000f,-0.003880f,-0.000000f,-0.000000f,-0.000000f,0.019993f,0.000000f,-0.000010f,-0.000000f,-0.000000f,
-  -0.000000f,-0.000000f,0.994528f,0.000000f,0.000000f,0.000000f,-0.000000f,-0.000000f,0.017723f,0.000000f,-0.000000f,0.000000f,
-  0.000027f,0.014560f,-0.000000f,0.933445f,0.000114f,0.000032f,0.000020f,0.010954f,-0.000000f,0.004739f,0.000008f,0.000033f,
-  -0.014548f,-0.000027f,0.000000f,0.000114f,0.933497f,0.000079f,-0.010945f,-0.000020f,0.000000f,0.000008f,0.004743f,0.000082f,
-  0.000331f,-0.000132f,0.000000f,0.000571f,0.001428f,0.996745f,0.000243f,-0.000097f,0.000000f,0.000042f,0.000106f,0.006571f,
-  -0.001903f,-0.000003f,0.000000f,0.000015f,0.383701f,0.000010f,0.998568f,-0.000003f,0.000000f,0.000001f,0.001274f,0.000011f,
-  -0.000003f,-0.001904f,0.000000f,-0.383695f,-0.000015f,-0.000004f,-0.000003f,0.998567f,0.000000f,-0.001274f,-0.000001f,-0.000004f,
-  -0.000000f,-0.000000f,-0.547188f,0.000000f,0.000000f,0.000000f,-0.000000f,-0.000000f,0.772340f,0.000000f,-0.000000f,0.000000f,
-  0.005335f,2.912025f,0.000000f,-13.310992f,0.022809f,0.006349f,0.003906f,2.190721f,-0.000000f,-0.052217f,0.001686f,0.006588f,
-  -2.909586f,-0.005335f,0.000000f,0.022808f,-13.300594f,0.015893f,-2.188937f,-0.003906f,0.000000f,0.001686f,-0.051449f,0.016491f,
-  0.066195f,-0.026455f,0.000000f,0.114111f,0.285517f,-0.650985f,0.048672f,-0.019452f,0.000000f,0.008465f,0.021180f,0.314175f,
+sfloat AmBKt_data[NSTATES*NSTATES] = {
+  0.999991f,-0.000000f,-0.000000f,0.000000f,0.003807f,0.000000f,0.019993f,-0.000000f,-0.000000f,0.000000f,0.000009f,0.000000f,
+  -0.000000f,0.999991f,-0.000000f,-0.003806f,-0.000000f,-0.000000f,-0.000000f,0.019993f,-0.000000f,-0.000009f,-0.000000f,-0.000000f,
+  -0.000000f,-0.000000f,0.994622f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000000f,0.017754f,0.000000f,-0.000000f,-0.000000f,
+  0.000018f,0.014662f,0.000000f,0.933049f,0.000075f,0.000032f,0.000013f,0.011028f,0.000000f,0.004707f,0.000006f,0.000033f,
+  -0.014649f,-0.000018f,-0.000000f,0.000075f,0.933106f,0.000080f,-0.011019f,-0.000013f,0.000000f,0.000006f,0.004711f,0.000083f,
+  0.000335f,-0.000134f,-0.000000f,0.000577f,0.001444f,0.996775f,0.000246f,-0.000098f,-0.000000f,0.000043f,0.000107f,0.006602f,
+  -0.001989f,-0.000002f,-0.000000f,0.000010f,0.383318f,0.000011f,0.998504f,-0.000002f,-0.000000f,0.000001f,0.001281f,0.000011f,
+  -0.000002f,-0.001991f,-0.000000f,-0.383310f,-0.000010f,-0.000004f,-0.000002f,0.998503f,-0.000000f,-0.001281f,-0.000001f,-0.000005f,
+  -0.000000f,-0.000000f,-0.537819f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000000f,0.775417f,0.000000f,-0.000000f,-0.000000f,
+  0.003504f,2.932430f,0.000000f,-13.390115f,0.014964f,0.006424f,0.002565f,2.205670f,0.000000f,-0.058661f,0.001107f,0.006666f,
+  -2.929753f,-0.003504f,-0.000000f,0.014963f,-13.378707f,0.016071f,-2.203712f,-0.002565f,-0.000000f,0.001107f,-0.057819f,0.016676f,
+  0.066993f,-0.026783f,-0.000000f,0.115450f,0.288773f,-0.644926f,0.049258f,-0.019693f,-0.000000f,0.008569f,0.021434f,0.320463f,
 };
-static sfloat coeff_d2p_data[NSTATES*NINPUTS] = {
-  -0.000001f,0.000000f,-0.000000f,-0.000001f,-0.000003f,-0.000879f,-0.000001f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000009f,
-  0.000001f,-0.000000f,-0.000000f,0.000001f,0.000003f,0.000728f,0.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000007f,
-  -0.000000f,0.000000f,-0.000000f,-0.000001f,-0.000002f,-0.000409f,-0.000000f,0.000000f,-0.000000f,-0.000000f,-0.000000f,-0.000004f,
-  0.000000f,0.000000f,-0.000000f,0.000002f,0.000002f,0.000560f,0.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000005f,
+sfloat coeff_d2p_data[NSTATES*NINPUTS] = {
+  0.074927f,0.142503f,1.397135f,-0.653575f,0.334852f,-0.271611f,0.055876f,0.107376f,0.583418f,-0.051908f,0.025881f,-0.287010f,
+  -0.087308f,0.116561f,1.397135f,-0.529393f,-0.391547f,0.269611f,-0.065200f,0.087485f,0.583418f,-0.041623f,-0.030376f,0.285066f,
+  -0.170980f,-0.104168f,1.397135f,0.472648f,-0.788090f,-0.274808f,-0.129091f,-0.078153f,0.583418f,0.037125f,-0.062909f,-0.290080f,
+  0.183361f,-0.154896f,1.397135f,0.710321f,0.844785f,0.276807f,0.138414f,-0.116708f,0.583418f,0.056407f,0.067403f,0.292024f,
 };
-static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0};
-static sfloat p_data[NSTATES * NHORIZON] = {0};
-static sfloat Q_data[NSTATES * NSTATES] = {0};
-static sfloat R_data[NINPUTS * NINPUTS] = {0};
-static sfloat q_data[NSTATES*(NHORIZON-1)] = {0};
-static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0};
-static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0};
 
-static sfloat umin_data[NINPUTS] = {0};
-static sfloat umax_data[NINPUTS] = {0};
-// Put constraints on u, x
-static sfloat Acu_data[NINPUTS * NINPUTS] = {0};  
-static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0};
-
-static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0};
+  
+// Create data array, all zero initialization
+static sfloat x0_data[NSTATES] = {0.0f};       // initial state
+static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
+static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
+static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
+static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
+static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
+static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
+static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
+static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
+static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
+static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static sfloat umin_data[NINPUTS] = {0.0f};
+static sfloat umax_data[NINPUTS] = {0.0f};
+static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
-static Matrix X[NSIM];
-static Matrix Xref[NSIM];
-static Matrix Uref[NSIM - 1];
-static Matrix Xhrz[NHORIZON];
-static Matrix Uhrz[NHORIZON - 1];
+static Matrix Xref[NRUN];
+static Matrix Uref[NRUN - 1];
+static Matrix X[NHORIZON];
+static Matrix U[NHORIZON - 1];
 static Matrix d[NHORIZON - 1];
 static Matrix p[NHORIZON];
 static Matrix YU[NHORIZON - 1];
@@ -204,6 +183,7 @@ static Matrix A;
 static Matrix B;
 static Matrix f;
 
+// Create TinyMPC struct
 tiny_Model model;
 tiny_AdmmSettings stgs;
 tiny_AdmmData data;
@@ -211,67 +191,64 @@ tiny_AdmmInfo info;
 tiny_AdmmSolution soln;
 tiny_AdmmWorkspace work;
 
-// Struct for logging position information
-static bool isInit = false;
+// Helper variables
+static bool isInit = false;  // fix for tracking problem
+#define U_HOVER (30.0f / 60.0f);  // pwm, = weight/max thrust 
 
 void controllerOutOfTreeInit(void) {
   if (isInit) {
     return;
   }
-
-  for (int i = 0; i < NSIM; ++i) {
-    X[i] = slap_MatrixFromArray(NSTATES, 1, &X_data[i * NSTATES]);
-  }
-
-  /* Create TinyMPC struct and problem data*/
-  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, 0.02);
+  
+  /* Start MPC initialization*/
+  
+  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
   tiny_InitSettings(&stgs);
-  stgs.rho_init = 1e0;  // Important (select offline, associated with precomp.)
+
+  stgs.rho_init = 1e0;  // IMPORTANT (select offline, associated with precomp.)
+
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
   // Fill in the remaining struct 
-  // T_INIT_ZEROS(temp_data);
   tiny_InitWorkspaceTempData(&work, ZU, ZU_new, 0, 0, temp_data);
   tiny_InitPrimalCache(&work, Quu_inv_data, AmBKt_data, coeff_d2p_data);
 
   tiny_InitModelFromArray(&model, &A, &B, &f, A_data, B_data, f_data);
-  tiny_InitSolnTrajFromArray(&work, Xhrz, Uhrz, Xhrz_data, Uhrz_data);
+  tiny_InitSolnTrajFromArray(&work, X, U, X_data, U_data);
   tiny_InitSolnGainsFromArray(&work, d, p, d_data, p_data, Kinf_data, Pinf_data);
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
   tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
 
-  /* Set up LQR cost */
+  // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
-  // slap_SetIdentity(prob.Q, 1000e-1);
-  sfloat Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 0.1, 0.1, 0.1};
+  sfloat Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   slap_SetDiagonal(data.Q, Qdiag, NSTATES);
   slap_SetIdentity(data.R, 1);
   slap_AddIdentity(data.R, work.rho); // \tilde{R}
   tiny_InitDataLinearCostFromArray(&work, q, r, r_tilde, q_data, r_data, r_tilde_data);
 
-  /* Set up constraints */
+  // Set up constraints 
   tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
-  slap_SetConst(data.ucu, 0.5);
-  slap_SetConst(data.lcu, -0.5);
+  slap_SetConst(data.ucu, 0.5);   // UPPER CONTROL BOUND 
+  slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
 
-  tiny_UpdateLinearCost(&work);
-  /* Solver settings */
+  // Initialize linear cost (for tracking)
+  // tiny_UpdateLinearCost(&work);
+
+  // Solver settings 
   stgs.en_cstr_goal = 0;
-  stgs.en_cstr_inputs = 0;
+  stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 1;           // limit this if needed
+  stgs.max_iter = 10;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 4;
-  stgs.tol_abs_dual = 1e-1;
-  stgs.tol_abs_prim = 1e-2;
+  stgs.check_termination = 2;
+  stgs.tol_abs_dual = 5e-2;
+  stgs.tol_abs_prim = 5e-2;
 
-  // Absolute formulation:
-  // Warm-starting since horizon data is reused
-  // Stop earlier as horizon exceeds the end
-  MatCpy(X[0], data.x0);  
   isInit = true;
+  /* End of MPC initialization */  
 }
 
 bool controllerOutOfTreeTest() {
@@ -280,23 +257,30 @@ bool controllerOutOfTreeTest() {
 }
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
-  if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
+
+  /* Controller rate */
+  if (!RATE_DO_EXECUTE(MPC_RATE, tick)) {
     return;
   }
+
+  // Get current time
+  uint64_t startTimestamp = usecTimestamp();
+
+  /* Get current tracking errors (initial state for MPC) */
   // Positon error, [m]
-  data.x0.data[0] = state->position.x - 1*setpoint->position.x;
-  data.x0.data[1] = state->position.y - 1*setpoint->position.y;
-  data.x0.data[2] = state->position.z - 0.5f - 0*setpoint->position.z;
+  x0_data[0] = state->position.x - 0*setpoint->position.x;
+  x0_data[1] = state->position.y - 0*setpoint->position.y;
+  x0_data[2] = state->position.z - 0.5f - 0*setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  data.x0.data[6] = state->velocity.x - 1*setpoint->velocity.x;
-  data.x0.data[7] = state->velocity.y - 1*setpoint->velocity.y;
-  data.x0.data[8] = state->velocity.z - 1*setpoint->velocity.z;
+  x0_data[6] = state->velocity.x - 0*setpoint->velocity.x;
+  x0_data[7] = state->velocity.y - 0*setpoint->velocity.y;
+  x0_data[8] = state->velocity.z - 0*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  data.x0.data[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
-  data.x0.data[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
-  data.x0.data[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
+  x0_data[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
+  x0_data[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
+  x0_data[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
 
   struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                  radians(setpoint->attitude.pitch), 
@@ -314,38 +298,44 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
   
   // Attitude error
-  data.x0.data[3] = phi.x;
-  data.x0.data[4] = phi.y;
-  data.x0.data[5] = phi.z;
+  x0_data[3] = phi.x;
+  x0_data[4] = phi.y;
+  x0_data[5] = phi.z;
 
-  // MPC solve
+  /* MPC solve */
   
-  // Warm-start by previous solution
-  // tiny_ShiftFill(Uhrz, T_ARRAY_SIZE(Uhrz));
+  // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
+  // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
-  // Solve optimization problem using Augmented Lagrangian TVLQR
+  // Solve optimization problem using ADMM
   tiny_SolveAdmm(&work);
+  uint32_t mpcTime = usecTimestamp() - startTimestamp;
 
+  // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
+  // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
+  // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
+  // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
+  // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
-  DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(Uhrz[0].data[0]), (double)(Uhrz[0].data[1]), (double)(Uhrz[0].data[2]), (double)(Uhrz[0].data[3]));
-  // DEBUG_PRINT("info.pri_res = %f\n", (double)(info.pri_res));
-  DEBUG_PRINT("ex = [%.2f, %.2f, %.2f]\n", (double)(data.x0.data[0]), (double)(data.x0.data[1]), (double)(data.x0.data[2]));
-
-  // Output control
+  /* Output control */
   // if (setpoint->mode.z == modeDisable) {
-    // control->normalizedForces[0] = 0.0f;
-    // control->normalizedForces[1] = 0.0f;
-    // control->normalizedForces[2] = 0.0f;
-    // control->normalizedForces[3] = 0.0f;
+  //   control->normalizedForces[0] = 0.0f;
+  //   control->normalizedForces[1] = 0.0f;
+  //   control->normalizedForces[2] = 0.0f;
+  //   control->normalizedForces[3] = 0.0f;
   // } else {
-  //   control->normalizedForces[0] = ZU_new[0].data[0] + 0.5f;
-  //   control->normalizedForces[1] = ZU_new[0].data[1] + 0.5f;
-  //   control->normalizedForces[2] = ZU_new[0].data[1] + 0.5f;
-  //   control->normalizedForces[3] = ZU_new[0].data[0] + 0.5f;
+    control->normalizedForces[0] = U[0].data[0] + U_HOVER;  // PWM 0..1
+    control->normalizedForces[1] = U[0].data[1] + U_HOVER;
+    control->normalizedForces[2] = U[0].data[2] + U_HOVER;
+    control->normalizedForces[3] = U[0].data[3] + U_HOVER;
   // } 
-  control->normalizedForces[0] = 0.0f;
-  control->normalizedForces[1] = 0.0f;
-  control->normalizedForces[2] = 0.0f;
-  control->normalizedForces[3] = 0.0f;
+
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
+
   control->controlMode = controlModePWM;
 }
