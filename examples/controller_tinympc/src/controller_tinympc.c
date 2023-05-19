@@ -73,7 +73,7 @@ void appMain() {
 // static sfloat x0_data[NSTATES] = {0, 1, 1, 1, 0, 0,
                           //  0, 0, 0, 0, 0, 0};  // initial state
 static sfloat x0_data[NSTATES] = {0};  // initial state
-static sfloat xg_data[NSTATES] = {0, 0, 1.0, 0, 0, 0,
+static sfloat xg_data[NSTATES] = {0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0};  
 static sfloat ug_data[NINPUTS] = {0};      // goal input if needed
 static sfloat Xhrz_data[NSTATES * NHORIZON] = {0};      // save X for one horizon
@@ -253,8 +253,8 @@ void controllerOutOfTreeInit(void) {
 
   /* Set up constraints */
   tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
-  slap_SetConst(data.ucu, 0.3);
-  slap_SetConst(data.lcu, -0.3);
+  slap_SetConst(data.ucu, 0.5);
+  slap_SetConst(data.lcu, -0.5);
 
   tiny_UpdateLinearCost(&work);
   /* Solver settings */
@@ -262,7 +262,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_inputs = 0;
   stgs.en_cstr_states = 0;
   stgs.max_iter = 1;           // limit this if needed
-  stgs.verbose = 1;
+  stgs.verbose = 0;
   stgs.check_termination = 4;
   stgs.tol_abs_dual = 1e-1;
   stgs.tol_abs_prim = 1e-2;
@@ -286,7 +286,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Positon error, [m]
   data.x0.data[0] = state->position.x - 1*setpoint->position.x;
   data.x0.data[1] = state->position.y - 1*setpoint->position.y;
-  data.x0.data[2] = state->position.z - 1.0f - 0*setpoint->position.z;
+  data.x0.data[2] = state->position.z - 0.5f - 0*setpoint->position.z;
 
   // Body velocity error, [m/s]                          
   data.x0.data[6] = state->velocity.x - 1*setpoint->velocity.x;
@@ -323,12 +323,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Warm-start by previous solution
   // tiny_ShiftFill(Uhrz, T_ARRAY_SIZE(Uhrz));
 
-  DEBUG_PRINT("U[0].data[0] = %f\n", (double)(Uhrz[0].data[0]));
-  DEBUG_PRINT("info.pri_res = %f\n", (double)(info.pri_res));
-  DEBUG_PRINT("ez = %f\n", (double)(data.x0.data[2]));
-
   // Solve optimization problem using Augmented Lagrangian TVLQR
   tiny_SolveAdmm(&work);
+
+
+  DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(Uhrz[0].data[0]), (double)(Uhrz[0].data[1]), (double)(Uhrz[0].data[2]), (double)(Uhrz[0].data[3]));
+  // DEBUG_PRINT("info.pri_res = %f\n", (double)(info.pri_res));
+  DEBUG_PRINT("ex = [%.2f, %.2f, %.2f]\n", (double)(data.x0.data[0]), (double)(data.x0.data[1]), (double)(data.x0.data[2]));
 
   // Output control
   // if (setpoint->mode.z == modeDisable) {
