@@ -1,0 +1,1 @@
+obj-y += controller_lqr2.o

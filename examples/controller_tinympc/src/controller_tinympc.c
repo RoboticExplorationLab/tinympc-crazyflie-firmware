@@ -193,7 +193,7 @@ tiny_AdmmWorkspace work;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-#define U_HOVER (30.0f / 60.0f);  // pwm, = weight/max thrust 
+#define U_HOVER (35.0f / 60.0f);  // pwm, = weight/max thrust 
 
 void controllerOutOfTreeInit(void) {
   if (isInit) {
@@ -218,7 +218,7 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnGainsFromArray(&work, d, p, d_data, p_data, Kinf_data, Pinf_data);
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
-  tiny_SetInitialState(&work, x0_data);  
+  tiny_SetInitialState(&work, data.x0.data);  
   tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
 
   // Set up LQR cost 
@@ -241,9 +241,9 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 10;           // limit this if needed
+  stgs.max_iter = 1;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 2;
+  stgs.check_termination = 0;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
@@ -264,23 +264,23 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
 
   // Get current time
-  uint64_t startTimestamp = usecTimestamp();
+  // uint64_t startTimestamp = usecTimestamp();
 
   /* Get current tracking errors (initial state for MPC) */
   // Positon error, [m]
-  x0_data[0] = state->position.x - 0*setpoint->position.x;
-  x0_data[1] = state->position.y - 0*setpoint->position.y;
-  x0_data[2] = state->position.z - 0.5f - 0*setpoint->position.z;
+  data.x0.data[0] = state->position.x - 0*setpoint->position.x;
+  data.x0.data[1] = state->position.y - 0*setpoint->position.y;
+  data.x0.data[2] = state->position.z - 0.5f - 0*setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x0_data[6] = state->velocity.x - 0*setpoint->velocity.x;
-  x0_data[7] = state->velocity.y - 0*setpoint->velocity.y;
-  x0_data[8] = state->velocity.z - 0*setpoint->velocity.z;
+  data.x0.data[6] = state->velocity.x - 0*setpoint->velocity.x;
+  data.x0.data[7] = state->velocity.y - 0*setpoint->velocity.y;
+  data.x0.data[8] = state->velocity.z - 0*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
-  x0_data[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
-  x0_data[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
-  x0_data[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
+  data.x0.data[9]  = radians(sensors->gyro.x - 0*setpoint->attitudeRate.roll);   
+  data.x0.data[10] = radians(sensors->gyro.y - 0*setpoint->attitudeRate.pitch);
+  data.x0.data[11] = radians(sensors->gyro.z - 0*setpoint->attitudeRate.yaw);
 
   struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                  radians(setpoint->attitude.pitch), 
@@ -298,9 +298,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
   
   // Attitude error
-  x0_data[3] = phi.x;
-  x0_data[4] = phi.y;
-  x0_data[5] = phi.z;
+  data.x0.data[3] = phi.x;
+  data.x0.data[4] = phi.y;
+  data.x0.data[5] = phi.z;
 
   /* MPC solve */
   
@@ -309,7 +309,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   // Solve optimization problem using ADMM
   tiny_SolveAdmm(&work);
-  uint32_t mpcTime = usecTimestamp() - startTimestamp;
+  // uint32_t mpcTime = usecTimestamp() - startTimestamp;
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
@@ -317,20 +317,20 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
-  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
+  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(data.x0.data[0]), (double)(data.x0.data[1]), (double)(data.x0.data[2]));
 
   /* Output control */
-  // if (setpoint->mode.z == modeDisable) {
-  //   control->normalizedForces[0] = 0.0f;
-  //   control->normalizedForces[1] = 0.0f;
-  //   control->normalizedForces[2] = 0.0f;
-  //   control->normalizedForces[3] = 0.0f;
-  // } else {
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
     control->normalizedForces[0] = U[0].data[0] + U_HOVER;  // PWM 0..1
     control->normalizedForces[1] = U[0].data[1] + U_HOVER;
     control->normalizedForces[2] = U[0].data[2] + U_HOVER;
     control->normalizedForces[3] = U[0].data[3] + U_HOVER;
-  // } 
+  } 
 
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;

@@ -123,7 +123,8 @@ static void powerDistributionForceTorqueScaled(const control_t *control, motors_
   const float thrustPart = 0.25f * control->thrustSi; // N (per rotor)
   const float yawPart = 0.25f * control->torqueZ / thrustToTorque;
 
-  motorForces[0] = thrustPart - rollPart - pitchPart - yawPart;
+  // Because pitch in Crazyflie's coordinate is negated!!
+  motorForces[0] = thrustPart - rollPart - pitchPart - yawPart;  // N
   motorForces[1] = thrustPart - rollPart + pitchPart + yawPart;
   motorForces[2] = thrustPart + rollPart + pitchPart - yawPart;
   motorForces[3] = thrustPart + rollPart - pitchPart + yawPart;
