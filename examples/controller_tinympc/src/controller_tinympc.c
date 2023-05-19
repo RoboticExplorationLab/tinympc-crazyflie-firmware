@@ -72,9 +72,9 @@ void appMain() {
 // Create data array 
 // static sfloat x0_data[NSTATES] = {0, 1, 1, 1, 0, 0,
                           //  0, 0, 0, 0, 0, 0};  // initial state
-static sfloat x0_data[NSTATES] = {0, 1, 1, 0.7, 0.7, 0,
-                            0, 0, 0, 0, 0, 0};  // initial state
-static sfloat xg_data[NSTATES] = {0};  
+static sfloat x0_data[NSTATES] = {0};  // initial state
+static sfloat xg_data[NSTATES] = {0, 0, 1.0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0};  
 static sfloat ug_data[NINPUTS] = {0};      // goal input if needed
 static sfloat Xhrz_data[NSTATES * NHORIZON] = {0};      // save X for one horizon
 static sfloat X_data[NSTATES * NSIM] = {0};             // save X for the whole run
@@ -259,9 +259,9 @@ void controllerOutOfTreeInit(void) {
   tiny_UpdateLinearCost(&work);
   /* Solver settings */
   stgs.en_cstr_goal = 0;
-  stgs.en_cstr_inputs = 1;
+  stgs.en_cstr_inputs = 0;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 100;           // limit this if needed
+  stgs.max_iter = 1;           // limit this if needed
   stgs.verbose = 1;
   stgs.check_termination = 4;
   stgs.tol_abs_dual = 1e-1;
@@ -270,7 +270,7 @@ void controllerOutOfTreeInit(void) {
   // Absolute formulation:
   // Warm-starting since horizon data is reused
   // Stop earlier as horizon exceeds the end
-  MatCpy(X[0], work.data->x0);  
+  MatCpy(X[0], data.x0);  
   isInit = true;
 }
 
@@ -280,5 +280,71 @@ bool controllerOutOfTreeTest() {
 }
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
+  if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
+    return;
+  }
+  // Positon error, [m]
+  data.x0.data[0] = state->position.x - 1*setpoint->position.x;
+  data.x0.data[1] = state->position.y - 1*setpoint->position.y;
+  data.x0.data[2] = state->position.z - 1.0f - 0*setpoint->position.z;
+
+  // Body velocity error, [m/s]                          
+  data.x0.data[6] = state->velocity.x - 1*setpoint->velocity.x;
+  data.x0.data[7] = state->velocity.y - 1*setpoint->velocity.y;
+  data.x0.data[8] = state->velocity.z - 1*setpoint->velocity.z;
+
+  // Angular rate error, [rad/s]
+  data.x0.data[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
+  data.x0.data[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  data.x0.data[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
+
+  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                 radians(setpoint->attitude.pitch), 
+                                 radians(setpoint->attitude.yaw));
+  struct quat attitude_g = rpy2quat(desired_rpy);
+
+  struct quat attitude = mkquat(
+    state->attitudeQuaternion.x,
+    state->attitudeQuaternion.y,
+    state->attitudeQuaternion.z,
+    state->attitudeQuaternion.w);  // current attitude
+
+  struct quat attitude_gI = qinv(attitude_g);  
+  struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
+  struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
   
+  // Attitude error
+  data.x0.data[3] = phi.x;
+  data.x0.data[4] = phi.y;
+  data.x0.data[5] = phi.z;
+
+  // MPC solve
+  
+  // Warm-start by previous solution
+  // tiny_ShiftFill(Uhrz, T_ARRAY_SIZE(Uhrz));
+
+  DEBUG_PRINT("U[0].data[0] = %f\n", (double)(Uhrz[0].data[0]));
+  DEBUG_PRINT("info.pri_res = %f\n", (double)(info.pri_res));
+  DEBUG_PRINT("ez = %f\n", (double)(data.x0.data[2]));
+
+  // Solve optimization problem using Augmented Lagrangian TVLQR
+  tiny_SolveAdmm(&work);
+
+  // Output control
+  // if (setpoint->mode.z == modeDisable) {
+    // control->normalizedForces[0] = 0.0f;
+    // control->normalizedForces[1] = 0.0f;
+    // control->normalizedForces[2] = 0.0f;
+    // control->normalizedForces[3] = 0.0f;
+  // } else {
+  //   control->normalizedForces[0] = ZU_new[0].data[0] + 0.5f;
+  //   control->normalizedForces[1] = ZU_new[0].data[1] + 0.5f;
+  //   control->normalizedForces[2] = ZU_new[0].data[1] + 0.5f;
+  //   control->normalizedForces[3] = ZU_new[0].data[0] + 0.5f;
+  // } 
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
+  control->controlMode = controlModePWM;
 }
