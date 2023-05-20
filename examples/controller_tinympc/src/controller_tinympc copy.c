@@ -63,7 +63,7 @@ void appMain() {
 #define DT 0.02f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
-#define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 5    // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NRUN 5      // length of reference trajectory
 #define MPC_RATE RATE_100_HZ  // control frequency
 
@@ -255,15 +255,15 @@ void controllerOutOfTreeInit(void) {
   slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
 
   // Initialize linear cost (for tracking)
-  tiny_UpdateLinearCost(&work);
+  // tiny_UpdateLinearCost(&work);
 
   // Solver settings 
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 4;           // limit this if needed
+  stgs.max_iter = 5;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 4;
+  stgs.check_termination = 0;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
@@ -283,48 +283,40 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
 
-  /* Get goal state (reference) */
-  xg_data[0]  = setpoint->position.x;
-  xg_data[1]  = setpoint->position.y;
-  xg_data[2]  = 0.4f; //setpoint->position.z;
-  xg_data[6]  = setpoint->velocity.x;
-  xg_data[7]  = setpoint->velocity.y;
-  xg_data[8]  = setpoint->velocity.z;
-  xg_data[9]  = setpoint->attitudeRate.roll;
-  xg_data[10] = setpoint->attitudeRate.pitch;
-  xg_data[11] = setpoint->attitudeRate.yaw;
+  // Get current time
+  // uint64_t startTimestamp = usecTimestamp();
+
+  /* Get current tracking errors (initial state for MPC) */
+  // Positon error, [m]
+  x0_data[0] = state->position.x - 1*setpoint->position.x;
+  x0_data[1] = state->position.y - 1*setpoint->position.y;
+  x0_data[2] = state->position.z - 1*setpoint->position.z;
+
+  // Body velocity error, [m/s]                          
+  x0_data[6] = state->velocity.x - 1*setpoint->velocity.x;
+  x0_data[7] = state->velocity.y - 1*setpoint->velocity.y;
+  x0_data[8] = state->velocity.z - 1*setpoint->velocity.z;
+
+  // Angular rate error, [rad/s]
+  x0_data[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
+  x0_data[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  x0_data[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
+
   struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                  radians(setpoint->attitude.pitch), 
                                  radians(setpoint->attitude.yaw));
-  struct quat attitude = rpy2quat(desired_rpy);
-  struct vec phi = quat2rp(qnormalize(attitude));  
-  xg_data[3] = phi.x;
-  xg_data[4] = phi.y;
-  xg_data[5] = phi.z;
+  struct quat attitude_g = rpy2quat(desired_rpy);
 
-  // Get current time
-  // uint64_t startTimestamp = usecTimestamp();
-  
-  /* Get current state (initial state for MPC) */
-  // delta_x = x - x_bar; x_bar = 0
-  // Positon error, [m]
-  x0_data[0] = state->position.x;
-  x0_data[1] = state->position.y;
-  x0_data[2] = state->position.z;
-  // Body velocity error, [m/s]                          
-  x0_data[6] = state->velocity.x;
-  x0_data[7] = state->velocity.y;
-  x0_data[8] = state->velocity.z;
-  // Angular rate error, [rad/s]
-  x0_data[9]  = radians(sensors->gyro.x);   
-  x0_data[10] = radians(sensors->gyro.y);
-  x0_data[11] = radians(sensors->gyro.z);
-  attitude = mkquat(
+  struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
-  phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+
+  struct quat attitude_gI = qinv(attitude_g);  
+  struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
+  struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
+  
   // Attitude error
   x0_data[3] = phi.x;
   x0_data[4] = phi.y;
@@ -336,7 +328,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
-  tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
   // uint32_t mpcTime = usecTimestamp() - startTimestamp;
@@ -346,22 +337,21 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-  DEBUG_PRINT("%d %d\n", info.status_val, info.iter);
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
   /* Output control */
-  // if (setpoint->mode.z == modeDisable) {
-  //   control->normalizedForces[0] = 0.0f;
-  //   control->normalizedForces[1] = 0.0f;
-  //   control->normalizedForces[2] = 0.0f;
-  //   control->normalizedForces[3] = 0.0f;
-  // } else {
-    control->normalizedForces[0] = ZU_new[0].data[0] + U_HOVER;  // PWM 0..1
-    control->normalizedForces[1] = ZU_new[0].data[1] + U_HOVER;
-    control->normalizedForces[2] = ZU_new[0].data[2] + U_HOVER;
-    control->normalizedForces[3] = ZU_new[0].data[3] + U_HOVER;
-  // } 
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
+    control->normalizedForces[0] = U[0].data[0] + U_HOVER;  // PWM 0..1
+    control->normalizedForces[1] = U[0].data[1] + U_HOVER;
+    control->normalizedForces[2] = U[0].data[2] + U_HOVER;
+    control->normalizedForces[3] = U[0].data[3] + U_HOVER;
+  } 
 
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;

@@ -39,7 +39,7 @@ enum tiny_ErrorCode tiny_BackwardPassGrad(tiny_AdmmWorkspace* work) {
 }
 
 enum tiny_ErrorCode tiny_SolveLqr(tiny_AdmmWorkspace* work) {
-  slap_Copy(work->soln->X[0], work->data->x0);
+  MatCpy(work->soln->X[0], work->data->x0);
   tiny_BackwardPassGrad(work);  
   tiny_ForwardPass(work);  
   return TINY_NO_ERROR;
