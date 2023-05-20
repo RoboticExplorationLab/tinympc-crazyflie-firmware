@@ -62,20 +62,20 @@ void appMain() {
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
 #define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
-#define LQR_RATE RATE_50_HZ  // control frequency
-#define U_HOVER (30.0f / 60.0f);  // pwm, = weight/max thrust 
+#define LQR_RATE RATE_100_HZ  // control frequency
+#define U_HOVER (31.0f / 60.0f);  // pwm, = weight/max thrust 
 
 // static float K[NU][NXt] = {
-//   {0.058442f,0.084182f,0.468490f,-0.552839f,0.371794f,-0.368698f,0.055428f,0.080729f,0.321795f,-0.048286f,0.031307f,-0.192745f},
-//   {-0.065680f,0.076994f,0.468490f,-0.498652f,-0.419314f,0.367426f,-0.062368f,0.073478f,0.321795f,-0.042873f,-0.035454f,0.192032f},
-//   {-0.094741f,-0.069745f,0.468490f,0.451060f,-0.627520f,-0.371064f,-0.091130f,-0.066526f,0.321795f,0.038720f,-0.055326f,-0.194042f},
-//   {0.101979f,-0.091431f,0.468490f,0.600430f,0.675040f,0.372337f,0.098071f,-0.087681f,0.321795f,0.052438f,0.059472f,0.194754f},
+//   {-0.126068f,0.102619f,1.394084f,-0.669760f,-0.824517f,-0.702334f,-0.120724f,0.098196f,0.794184f,-0.058096f,-0.071676f,-0.359952f},
+//   {0.117960f,0.063106f,1.394084f,-0.409691f,0.771640f,0.696851f,0.112968f,0.060272f,0.794184f,-0.035339f,0.067093f,0.357132f},
+//   {0.047493f,-0.071219f,1.394084f,0.462594f,0.306136f,-0.682963f,0.045245f,-0.068032f,0.794184f,0.039923f,0.026205f,-0.349994f},
+//   {-0.039385f,-0.094506f,1.394084f,0.616857f,-0.253260f,0.688446f,-0.037488f,-0.090435f,0.794184f,0.053512f,-0.021623f,0.352813f},
 // };
 static float K[NU][NXt] = {
-  {0.031310f,0.097997f,3.081954f,-0.638408f,0.203389f,-0.813132f,0.029910f,0.093711f,1.641603f,-0.055269f,0.017556f,-0.415214f},
-  {-0.039593f,0.068189f,3.081954f,-0.443880f,-0.257343f,0.805876f,-0.037830f,0.065189f,1.641603f,-0.038397f,-0.022226f,0.411508f},
-  {-0.126550f,-0.059905f,3.081954f,0.389921f,-0.824679f,-0.824046f,-0.121029f,-0.057268f,1.641603f,0.033726f,-0.071418f,-0.420789f},
-  {0.134833f,-0.106281f,3.081954f,0.692366f,0.878633f,0.831302f,0.128949f,-0.101632f,1.641603f,0.059940f,0.076089f,0.424495f},
+  {-0.141668f,0.126596f,1.542556f,-0.658536f,-0.744417f,-0.530601f,-0.125704f,0.111952f,0.505438f,-0.050258f,-0.057398f,-0.225917f},
+  {0.140640f,0.103198f,1.542556f,-0.524130f,0.735134f,0.594336f,0.124566f,0.090537f,0.505438f,-0.039023f,0.056417f,0.251652f},
+  {0.084249f,-0.104505f,1.542556f,0.534755f,0.424451f,-0.754518f,0.073728f,-0.091916f,0.505438f,0.040098f,0.031262f,-0.316332f},
+  {-0.083221f,-0.125288f,1.542556f,0.647910f,-0.415168f,0.690783f,-0.072590f,-0.110573f,0.505438f,0.049183f,-0.030281f,0.290597f},
 };
 
 static float x_error[NXt];  
@@ -103,18 +103,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
   // Positon error, [m]
-  x_error[0] = -state->position.x - 1*setpoint->position.x;
+  x_error[0] = state->position.x - 1*setpoint->position.x;
   x_error[1] = state->position.y - 1*setpoint->position.y;
   x_error[2] = state->position.z - 1*setpoint->position.z;
 
   // Body velocity error, [m/s]                          
-  x_error[6] = -state->velocity.x - 1*setpoint->velocity.x;
+  x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
   x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
 
   // Angular rate error, [rad/s]
   x_error[9]  = radians(sensors->gyro.x - 1*setpoint->attitudeRate.roll);   
-  x_error[10] = radians(-sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
+  x_error[10] = radians(sensors->gyro.y - 1*setpoint->attitudeRate.pitch);
   x_error[11] = radians(sensors->gyro.z - 1*setpoint->attitudeRate.yaw);
 
   // struct quat attitude_g = qeye();  // goal attitude
@@ -130,7 +130,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
-    -state->attitudeQuaternion.y,
+    state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
 
