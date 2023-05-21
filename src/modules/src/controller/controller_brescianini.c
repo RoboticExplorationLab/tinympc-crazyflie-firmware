@@ -394,7 +394,8 @@ void controllerBrescianini(control_t *control,
     // update the commanded body torques based on the current error in body rates
     control_torque = mvmul(CRAZYFLIE_INERTIA, omegaErr);
 
-    control->thrustSi = control_thrust * CF_MASS; // force to provide control_thrust
+    control->thrustSi = control_thrust * 0.03; // force to provide control_thrust
+    // control->thrustSi = control_thrust * CF_MASS; // force to provide control_thrust
     control->torqueX = control_torque.x;
     control->torqueY = control_torque.y;
     control->torqueZ = control_torque.z;
