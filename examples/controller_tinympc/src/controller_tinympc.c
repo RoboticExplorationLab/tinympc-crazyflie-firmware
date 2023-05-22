@@ -64,11 +64,12 @@ void appMain() {
 #define DT 0.02f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
-#define NHORIZON 2   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_50_HZ  // control frequency
 
-#include "params_50hz_agg.h"
+// #include "params_50hz_agg.h"
+#include "params_50hz.h"
 
 /* Allocate global variables for MPC */
 
@@ -144,14 +145,14 @@ tiny_AdmmWorkspace work;
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
 #define U_HOVER (36.0f / 60.0f);  // pwm, = weight/max thrust 
-float setpoint_z = 0.0f;
+float setpoint_z = 0.1f;
 float setpoint_x = 0.0f;
 int z_sign = 1;
-
+int8_t result = 0;
 void controllerOutOfTreeInit(void) {
-  if (isInit) {
-    return;
-  }
+  // if (isInit) {
+  //   return;
+  // }
 
   /* Start MPC initialization*/
   
@@ -194,17 +195,17 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 1;           // limit this if needed
+  stgs.max_iter = 5;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 2;
+  stgs.check_termination = 1;
   stgs.tol_abs_dual = 10e-2;
   stgs.tol_abs_prim = 10e-2;
 
-  setpoint_z = 0.0f;
+  setpoint_z = 0.1f;
   setpoint_x = 0.0f;
   z_sign = 1;
 
-  isInit = true;
+  // isInit = true;
   /* End of MPC initialization */  
 }
 
@@ -221,17 +222,19 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
 
   // Rule to take-off and land gradually
-  // setpoint_z += z_sign * 0.002f;
-  // if (setpoint_z > 0.7f) z_sign = -1;
-  // if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
-  // setpoint_x += 0.002f;
-  // if (setpoint_x > 1.0f) setpoint_x = 1.0f;
+  // if (RATE_DO_EXECUTE(10, tick)) {    
+  //   setpoint_z += z_sign * 0.1f;
+  //   if (setpoint_z > 1.0f) z_sign = -1;
+  //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
+  //   setpoint_x += 1.0f;
+  //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
+  // }
 
   /* Get goal state (reference) */
   // xg_data[0]  = setpoint_x; 
+  // xg_data[2]  = setpoint_z; 
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
-  // xg_data[2]  = setpoint_z; 
   xg_data[2]  = setpoint->position.z;
   xg_data[6]  = setpoint->velocity.x;
   xg_data[7]  = setpoint->velocity.y;
@@ -292,7 +295,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-  DEBUG_PRINT("%d %d\n", info.status_val, info.iter);
+  result =  info.status_val * info.iter;
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
@@ -316,3 +319,40 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   control->controlMode = controlModePWM;
 }
+
+/**
+ * Logging variables for the command and reference signals for the
+ * MPC controller
+ */
+
+LOG_GROUP_START(ctrlMPC)
+
+LOG_ADD(LOG_FLOAT, x, &x0_data[0])
+LOG_ADD(LOG_FLOAT, y, &x0_data[1])
+LOG_ADD(LOG_FLOAT, z, &x0_data[2])
+
+LOG_ADD(LOG_FLOAT, roll,  &x0_data[3])
+LOG_ADD(LOG_FLOAT, pitch, &x0_data[4])
+LOG_ADD(LOG_FLOAT, yaw,   &x0_data[5])
+
+LOG_ADD(LOG_FLOAT, vx, &x0_data[6])
+LOG_ADD(LOG_FLOAT, vy, &x0_data[7])
+LOG_ADD(LOG_FLOAT, vz, &x0_data[8])
+
+LOG_ADD(LOG_FLOAT, wroll,  &x0_data[9])
+LOG_ADD(LOG_FLOAT, wpitch, &x0_data[10])
+LOG_ADD(LOG_FLOAT, wyaw,   &x0_data[11])
+
+LOG_ADD(LOG_INT8, result, &result)
+
+LOG_ADD(LOG_FLOAT, u0, &(U_data[0]))
+LOG_ADD(LOG_FLOAT, u1, &(U_data[1]))
+LOG_ADD(LOG_FLOAT, u2, &(U_data[2]))
+LOG_ADD(LOG_FLOAT, u3, &(U_data[3]))
+
+LOG_ADD(LOG_FLOAT, yu0, &(YU_data[0]))
+LOG_ADD(LOG_FLOAT, yu1, &(YU_data[1]))
+LOG_ADD(LOG_FLOAT, yu2, &(YU_data[2]))
+LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
+
+LOG_GROUP_STOP(ctrlMPC)
