@@ -291,7 +291,7 @@ static void stabilizerTask(void* param)
       commanderGetSetpoint(&setpoint, &state);
       compressSetpoint();
 
-      collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
+      // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       controller(&control, &setpoint, &sensorData, &state, tick);
 
