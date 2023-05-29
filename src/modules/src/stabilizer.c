@@ -181,7 +181,7 @@ void stabilizerInit(StateEstimatorType estimator)
   controllerInit(ControllerTypeAutoSelect);
   powerDistributionInit();
   motorsInit(platformConfigGetMotorMapping());
-  collisionAvoidanceInit();
+  // collisionAvoidanceInit();
   estimatorType = stateEstimatorGetType();
   controllerType = controllerGetType();
 
@@ -199,7 +199,7 @@ bool stabilizerTest(void)
   pass &= controllerTest();
   pass &= powerDistributionTest();
   pass &= motorsTest();
-  pass &= collisionAvoidanceTest();
+  // pass &= collisionAvoidanceTest();
 
   return pass;
 }

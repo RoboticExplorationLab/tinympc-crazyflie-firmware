@@ -65,13 +65,11 @@ void appMain() {
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define NSIM 500      // length of reference trajectory
+#define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_50_HZ  // control frequency
 
 // #include "params_50hz_agg.h"
 #include "params_50hz.h"
-
-#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 
@@ -120,8 +118,8 @@ static sfloat umax_data[NINPUTS] = {0.0f};
 static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
-static Matrix Xref[NSTATES*NHORIZON];
-static Matrix Uref[NINPUTS*(NHORIZON - 1)];
+static Matrix Xref[NSIM];
+static Matrix Uref[NSIM - 1];
 static Matrix X[NHORIZON];
 static Matrix U[NHORIZON - 1];
 static Matrix d[NHORIZON - 1];
@@ -155,12 +153,7 @@ void controllerOutOfTreeInit(void) {
   // if (isInit) {
   //   return;
   // }
-  for (int i = 0; i < NSIM; ++i) {
-    if (i < NSIM - 1) {
-      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
-    }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
-  }
+
   /* Start MPC initialization*/
   
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
@@ -208,6 +201,11 @@ void controllerOutOfTreeInit(void) {
   stgs.tol_abs_dual = 10e-2;
   stgs.tol_abs_prim = 10e-2;
 
+  setpoint_z = 0.1f;
+  setpoint_x = 0.0f;
+  z_sign = 1;
+
+  // isInit = true;
   /* End of MPC initialization */  
 }
 
@@ -223,7 +221,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
 
+  // Rule to take-off and land gradually
+  // if (RATE_DO_EXECUTE(10, tick)) {    
+  //   setpoint_z += z_sign * 0.1f;
+  //   if (setpoint_z > 1.0f) z_sign = -1;
+  //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
+  //   setpoint_x += 1.0f;
+  //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
+  // }
+
   /* Get goal state (reference) */
+  // xg_data[0]  = setpoint_x; 
+  // xg_data[2]  = setpoint_z; 
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
   xg_data[2]  = setpoint->position.z;
