@@ -61,7 +61,7 @@ void appMain() {
 
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
-#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
+#define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
 #define LQR_RATE RATE_50_HZ  // control frequency
 #define U_HOVER (38.0f / 60.0f);  // pwm, = weight/max thrust 
 // PID: thrust_base = 0.55 pwm
@@ -116,7 +116,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x_error[1] = state->position.y - 1*setpoint->position.y;
   x_error[2] = state->position.z - 1*setpoint->position.z;
 
-  // Body velocity error, [m/s]                          
+  // Frame velocity error, [m/s]                          
   x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
   x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
@@ -141,7 +141,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  // current attitude
+    state->attitudeQuaternion.w);  // current attitude (right pitch)
 
   struct quat attitude_gI = qinv(attitude_g);  
   struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));

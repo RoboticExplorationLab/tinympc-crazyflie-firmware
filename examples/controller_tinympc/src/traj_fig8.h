@@ -1,5 +1,5 @@
-#ifndef QUADROTOR_FIG8_H
-# define QUADROTOR_FIG8_H
+#ifndef TRAJ_FIG8_H
+# define TRAJ_FIG8_H
 
 # ifdef __cplusplus
 extern "C" {
@@ -1034,4 +1034,4 @@ static sfloat X_ref_data[] = {
 }
 # endif // ifdef __cplusplus
 
-#endif // ifndef QUADROTOR_FIG8_H
+#endif // ifndef TRAJ_FIG8_H
