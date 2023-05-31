@@ -44,6 +44,8 @@
 #include "num.h"
 #include "math3d.h"
 
+#include "traj_fig8.h"
+
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "CONTROLLER_LQR"
 #include "debug.h"
@@ -61,18 +63,19 @@ void appMain() {
 
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
-#define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
-#define LQR_RATE RATE_50_HZ  // control frequency
+#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
+#define LQR_RATE RATE_100_HZ  // control frequency
 #define U_HOVER (38.0f / 60.0f);  // pwm, = weight/max thrust 
 // PID: thrust_base = 0.55 pwm
+#define NSIM 500
 
 // 100HZ
-// static float K[NU][NXt] = {
-//   {-0.185864f,0.180278f,0.461060f,-0.636400f,-0.701818f,-0.407242f,-0.119654f,0.113294f,0.223558f,-0.049461f,-0.060174f,-0.269965f},
-//   {0.183541f,0.166895f,0.461060f,-0.528924f,0.682786f,0.422112f,0.117279f,0.101126f,0.223558f,-0.033619f,0.058320f,0.277318f},
-//   {0.159443f,-0.169782f,0.461060f,0.549587f,0.484211f,-0.458550f,0.095884f,-0.103829f,0.223558f,0.035573f,0.025417f,-0.295330f},
-//   {-0.157121f,-0.177391f,0.461060f,0.615736f,-0.465178f,0.443680f,-0.093509f,-0.110590f,0.223558f,0.047506f,-0.023563f,0.287977f},
-// };
+static float K[NU][NXt] = {
+  {-0.185864f,0.180278f,0.461060f,-0.636400f,-0.701818f,-0.407242f,-0.119654f,0.113294f,0.223558f,-0.049461f,-0.060174f,-0.269965f},
+  {0.183541f,0.166895f,0.461060f,-0.528924f,0.682786f,0.422112f,0.117279f,0.101126f,0.223558f,-0.033619f,0.058320f,0.277318f},
+  {0.159443f,-0.169782f,0.461060f,0.549587f,0.484211f,-0.458550f,0.095884f,-0.103829f,0.223558f,0.035573f,0.025417f,-0.295330f},
+  {-0.157121f,-0.177391f,0.461060f,0.615736f,-0.465178f,0.443680f,-0.093509f,-0.110590f,0.223558f,0.047506f,-0.023563f,0.287977f},
+};
 
 // 50HZ
 // static float K[NU][NXt] = {
@@ -81,24 +84,22 @@ void appMain() {
 //   {0.081775f,-0.090862f,0.561104f,0.371276f,0.303009f,-0.474485f,0.059959f,-0.068186f,0.247898f,0.024029f,0.013571f,-0.293212f},
 //   {-0.080207f,-0.097581f,0.561104f,0.439507f,-0.286714f,0.459201f,-0.058116f,-0.075086f,0.247898f,0.036236f,-0.011901f,0.285906f},
 // };
-static float K[NU][NXt] = {
-  {-0.089412f,0.084394f,0.561104f,-0.475665f,-0.542625f,-0.708036f,-0.077112f,0.070987f,0.247898f,-0.043822f,-0.055214f,-0.301843f},
-  {0.086423f,0.072629f,0.561104f,-0.359315f,0.521945f,0.729571f,0.074341f,0.058631f,0.247898f,-0.026304f,0.053217f,0.307663f},
-  {0.067816f,-0.075797f,0.561104f,0.380735f,0.304785f,-0.780548f,0.053401f,-0.061537f,0.247898f,0.028353f,0.016502f,-0.321421f},
-  {-0.064828f,-0.081226f,0.561104f,0.454245f,-0.284105f,0.759012f,-0.050631f,-0.068082f,0.247898f,0.041773f,-0.014505f,0.315601f},
-};
+// static float K[NU][NXt] = {
+//   {-0.089412f,0.084394f,0.561104f,-0.475665f,-0.542625f,-0.708036f,-0.077112f,0.070987f,0.247898f,-0.043822f,-0.055214f,-0.301843f},
+//   {0.086423f,0.072629f,0.561104f,-0.359315f,0.521945f,0.729571f,0.074341f,0.058631f,0.247898f,-0.026304f,0.053217f,0.307663f},
+//   {0.067816f,-0.075797f,0.561104f,0.380735f,0.304785f,-0.780548f,0.053401f,-0.061537f,0.247898f,0.028353f,0.016502f,-0.321421f},
+//   {-0.064828f,-0.081226f,0.561104f,0.454245f,-0.284105f,0.759012f,-0.050631f,-0.068082f,0.247898f,0.041773f,-0.014505f,0.315601f},
+// };
+
 static float x_error[NXt];  
 static float control_input[NU];
 
 // Struct for logging position information
-static bool isInit = false;
+static int trajCounter;
+static bool trajStart = 0;
 
 void controllerOutOfTreeInit(void) {
-  if (isInit) {
-    return;
-  }
-
-  isInit = true;
+  trajCounter = 0;
 }
 
 bool controllerOutOfTreeTest() {
@@ -111,12 +112,25 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
     return;
   }
-  // Positon error, [m]
-  x_error[0] = state->position.x - 1*setpoint->position.x;
-  x_error[1] = state->position.y - 1*setpoint->position.y;
-  x_error[2] = state->position.z - 1*setpoint->position.z;
 
-  // Frame velocity error, [m/s]                          
+  if (trajStart) {
+    x_error[0] = state->position.x - X_ref_data[trajCounter*3 + 0];
+    x_error[1] = state->position.y - X_ref_data[trajCounter*3 + 1];
+    x_error[2] = state->position.z - X_ref_data[trajCounter*3 + 2]; 
+    trajCounter += 1;
+    if (trajCounter == NSIM) {
+      trajStart = 0;
+      trajCounter = 0;
+    }
+  }
+  else {
+    // Positon error, [m]
+    x_error[0] = state->position.x - 1*setpoint->position.x;
+    x_error[1] = state->position.y - 1*setpoint->position.y;
+    x_error[2] = state->position.z - 1*setpoint->position.z;
+  }
+
+  // Body velocity error, [m/s]                          
   x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
   x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
@@ -141,7 +155,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  // current attitude (right pitch)
+    state->attitudeQuaternion.w);  // current attitude
 
   struct quat attitude_gI = qinv(attitude_g);  
   struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
@@ -191,65 +205,7 @@ PARAM_GROUP_START(ctrlLQR)
 /**
  * @brief K gain
  */
-PARAM_ADD(PARAM_FLOAT, k11, &K[0][0])
-PARAM_ADD(PARAM_FLOAT, k21, &K[1][0])
-PARAM_ADD(PARAM_FLOAT, k31, &K[2][0])
-PARAM_ADD(PARAM_FLOAT, k41, &K[3][0])
-
-PARAM_ADD(PARAM_FLOAT, k12, &K[0][1])
-PARAM_ADD(PARAM_FLOAT, k22, &K[1][1])
-PARAM_ADD(PARAM_FLOAT, k32, &K[2][1])
-PARAM_ADD(PARAM_FLOAT, k42, &K[3][1])
-
-PARAM_ADD(PARAM_FLOAT, k13, &K[0][2])
-PARAM_ADD(PARAM_FLOAT, k23, &K[1][2])
-PARAM_ADD(PARAM_FLOAT, k33, &K[2][2])
-PARAM_ADD(PARAM_FLOAT, k43, &K[3][2])
-
-PARAM_ADD(PARAM_FLOAT, k14, &K[0][3])
-PARAM_ADD(PARAM_FLOAT, k24, &K[1][3])
-PARAM_ADD(PARAM_FLOAT, k34, &K[2][3])
-PARAM_ADD(PARAM_FLOAT, k44, &K[3][3])
-
-PARAM_ADD(PARAM_FLOAT, k15, &K[0][4])
-PARAM_ADD(PARAM_FLOAT, k25, &K[1][4])
-PARAM_ADD(PARAM_FLOAT, k35, &K[2][4])
-PARAM_ADD(PARAM_FLOAT, k45, &K[3][4])
-
-PARAM_ADD(PARAM_FLOAT, k16, &K[0][5])
-PARAM_ADD(PARAM_FLOAT, k26, &K[1][5])
-PARAM_ADD(PARAM_FLOAT, k36, &K[2][5])
-PARAM_ADD(PARAM_FLOAT, k46, &K[3][5])
-
-PARAM_ADD(PARAM_FLOAT, k17, &K[0][6])
-PARAM_ADD(PARAM_FLOAT, k27, &K[1][6])
-PARAM_ADD(PARAM_FLOAT, k37, &K[2][6])
-PARAM_ADD(PARAM_FLOAT, k47, &K[3][6])
-
-PARAM_ADD(PARAM_FLOAT, k18, &K[0][7])
-PARAM_ADD(PARAM_FLOAT, k28, &K[1][7])
-PARAM_ADD(PARAM_FLOAT, k38, &K[2][7])
-PARAM_ADD(PARAM_FLOAT, k48, &K[3][7])
-
-PARAM_ADD(PARAM_FLOAT, k19, &K[0][8])
-PARAM_ADD(PARAM_FLOAT, k29, &K[1][8])
-PARAM_ADD(PARAM_FLOAT, k39, &K[2][8])
-PARAM_ADD(PARAM_FLOAT, k49, &K[3][8])
-
-PARAM_ADD(PARAM_FLOAT, k110, &K[0][9])
-PARAM_ADD(PARAM_FLOAT, k210, &K[1][9])
-PARAM_ADD(PARAM_FLOAT, k310, &K[2][9])
-PARAM_ADD(PARAM_FLOAT, k410, &K[3][9])
-
-PARAM_ADD(PARAM_FLOAT, k111, &K[0][10])
-PARAM_ADD(PARAM_FLOAT, k211, &K[1][10])
-PARAM_ADD(PARAM_FLOAT, k311, &K[2][10])
-PARAM_ADD(PARAM_FLOAT, k411, &K[3][10])
-
-PARAM_ADD(PARAM_FLOAT, k112, &K[0][11])
-PARAM_ADD(PARAM_FLOAT, k212, &K[1][11])
-PARAM_ADD(PARAM_FLOAT, k312, &K[2][11])
-PARAM_ADD(PARAM_FLOAT, k412, &K[3][11])
+PARAM_ADD(PARAM_1BYTE, trajStart, &trajStart)
 
 PARAM_GROUP_STOP(ctrlLQR)
 
