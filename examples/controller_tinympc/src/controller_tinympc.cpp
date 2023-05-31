@@ -27,6 +27,12 @@
 
 // 50HZ
 
+// #include <Eigen.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -48,6 +54,19 @@
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "CONTROLLER_TINYMPC"
 #include "debug.h"
+
+#define nop()  __asm__("nop")
+int _sbrk() { return -1; }
+int _close() { return -1; }
+int _read() { return -1; }
+int _fstat() { return -1; }
+int _isatty() { return -1; }
+int _lseek() { return -1; }
+
+int _write(int file, char* ptr, int len)
+{
+   nop();
+}
 
 void appMain() {
   DEBUG_PRINT("Waiting for activation ...\n");
@@ -195,7 +214,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 5;           // limit this if needed
+  stgs.max_iter = 1;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
   stgs.tol_abs_dual = 10e-2;
@@ -282,21 +301,21 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   /* MPC solve */
   
   // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
-  // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
+  tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
-  // uint32_t mpcTime = usecTimestamp() - startTimestamp;
+  uint32_t mpcTime = usecTimestamp() - startTimestamp;
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-  result =  info.status_val * info.iter;
-  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // result =  info.status_val * info.iter;
+  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
   /* Output control */
@@ -356,3 +375,7 @@ LOG_ADD(LOG_FLOAT, yu2, &(YU_data[2]))
 LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
 
 LOG_GROUP_STOP(ctrlMPC)
+
+#ifdef __cplusplus
+}
+#endif

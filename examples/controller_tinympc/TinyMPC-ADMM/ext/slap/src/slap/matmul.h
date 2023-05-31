@@ -47,7 +47,18 @@
  * @param[in] alpha Scaling factor on output
  * @param[in] beta Scaling factor on input
  */
+
+// #ifdef SLAP_BACKEND_EIGEN
+#ifdef __cplusplus
+extern "C" {
+#endif
 enum slap_ErrorCode slap_MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
+#ifdef __cplusplus
+}
+#endif
+// #else
+// enum slap_ErrorCode slap_MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
+// #endif
 
 /**
  * @brief Simple in-place matrix multiplication

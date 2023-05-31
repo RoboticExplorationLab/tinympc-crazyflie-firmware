@@ -1,5 +1,13 @@
 #include "utils.h"
 
+#include <Eigen/Dense>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// #include "slap/slap.h"
+
 // void PrintSolveInfo(tiny_AdmmWorkspace* work) {
 //   tiny_AdmmInfo* info = work->info;
 //   printf("Solve info: \n");
@@ -237,25 +245,36 @@ void MatScale(Matrix A, sfloat alpha) {
 }
 
 void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
+  // int n = A.rows;
+  // int m = A.cols;
+  // int p = B.cols;
+  // sfloat Aik;
+  // sfloat Bkj;
+  // sfloat Cij;
+  // int ij;
+  // for (int i = 0; i < n; ++i) {
+  //   for (int j = 0; j < p; ++j) {
+  //     ij = i + j * n;
+  //     Cij = 0;
+  //     for (int k = 0; k < m; ++k) {  // columns of A, rows of B
+  //       Aik = A.data[i + n * k];
+  //       Bkj = B.data[k + m * j];
+  //       Cij += Aik * Bkj;
+  //     }
+  //     C.data[ij] = alpha * Cij + beta * C.data[ij];
+  //   }
+  // }
+
   int n = A.rows;
   int m = A.cols;
   int p = B.cols;
-  sfloat Aik;
-  sfloat Bkj;
-  sfloat Cij;
-  int ij;
-  for (int i = 0; i < n; ++i) {
-    for (int j = 0; j < p; ++j) {
-      ij = i + j * n;
-      Cij = 0;
-      for (int k = 0; k < m; ++k) {  // columns of A, rows of B
-        Aik = A.data[i + n * k];
-        Bkj = B.data[k + m * j];
-        Cij += Aik * Bkj;
-      }
-      C.data[ij] = alpha * Cij + beta * C.data[ij];
-    }
-  }
+
+  Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p) = 
+      beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p)
+      + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, m, n) 
+      * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, n, p);
+
+  // slap_MatMulAdd(C, A, B, alpha, beta);
 }
 
 void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
@@ -279,3 +298,7 @@ void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat bet
     }
   }
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
