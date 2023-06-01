@@ -63,7 +63,7 @@ void appMain() {
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
 #define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
 #define LQR_RATE RATE_100_HZ  // control frequency
-#define U_HOVER (38.0f / 60.0f);  // pwm, = weight/max thrust 
+// #define U_HOVER (40.0f / 60.0f);  // pwm, = weight/max thrust 
 // PID: thrust_base = 0.55 pwm
 
 // 100HZ
@@ -96,6 +96,7 @@ static float K[NU][NXt] = {
 
 static float x_error[NXt];  
 static float control_input[NU];
+static float u_hover = 0.5f;
 
 // Struct for logging position information
 static bool isInit = false;
@@ -177,10 +178,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = control_input[0] + U_HOVER;  // PWM 0..1
-    control->normalizedForces[1] = control_input[1] + U_HOVER;
-    control->normalizedForces[2] = control_input[2] + U_HOVER;
-    control->normalizedForces[3] = control_input[3] + U_HOVER;
+    control->normalizedForces[0] = control_input[0] + u_hover;  // PWM 0..1
+    control->normalizedForces[1] = control_input[1] + u_hover;
+    control->normalizedForces[2] = control_input[2] + u_hover;
+    control->normalizedForces[3] = control_input[3] + u_hover;
   } 
 
   // control->normalizedForces[0] = 0.0f;
@@ -198,65 +199,7 @@ PARAM_GROUP_START(ctrlLQR)
 /**
  * @brief K gain
  */
-PARAM_ADD(PARAM_FLOAT, k11, &K[0][0])
-PARAM_ADD(PARAM_FLOAT, k21, &K[1][0])
-PARAM_ADD(PARAM_FLOAT, k31, &K[2][0])
-PARAM_ADD(PARAM_FLOAT, k41, &K[3][0])
-
-PARAM_ADD(PARAM_FLOAT, k12, &K[0][1])
-PARAM_ADD(PARAM_FLOAT, k22, &K[1][1])
-PARAM_ADD(PARAM_FLOAT, k32, &K[2][1])
-PARAM_ADD(PARAM_FLOAT, k42, &K[3][1])
-
-PARAM_ADD(PARAM_FLOAT, k13, &K[0][2])
-PARAM_ADD(PARAM_FLOAT, k23, &K[1][2])
-PARAM_ADD(PARAM_FLOAT, k33, &K[2][2])
-PARAM_ADD(PARAM_FLOAT, k43, &K[3][2])
-
-PARAM_ADD(PARAM_FLOAT, k14, &K[0][3])
-PARAM_ADD(PARAM_FLOAT, k24, &K[1][3])
-PARAM_ADD(PARAM_FLOAT, k34, &K[2][3])
-PARAM_ADD(PARAM_FLOAT, k44, &K[3][3])
-
-PARAM_ADD(PARAM_FLOAT, k15, &K[0][4])
-PARAM_ADD(PARAM_FLOAT, k25, &K[1][4])
-PARAM_ADD(PARAM_FLOAT, k35, &K[2][4])
-PARAM_ADD(PARAM_FLOAT, k45, &K[3][4])
-
-PARAM_ADD(PARAM_FLOAT, k16, &K[0][5])
-PARAM_ADD(PARAM_FLOAT, k26, &K[1][5])
-PARAM_ADD(PARAM_FLOAT, k36, &K[2][5])
-PARAM_ADD(PARAM_FLOAT, k46, &K[3][5])
-
-PARAM_ADD(PARAM_FLOAT, k17, &K[0][6])
-PARAM_ADD(PARAM_FLOAT, k27, &K[1][6])
-PARAM_ADD(PARAM_FLOAT, k37, &K[2][6])
-PARAM_ADD(PARAM_FLOAT, k47, &K[3][6])
-
-PARAM_ADD(PARAM_FLOAT, k18, &K[0][7])
-PARAM_ADD(PARAM_FLOAT, k28, &K[1][7])
-PARAM_ADD(PARAM_FLOAT, k38, &K[2][7])
-PARAM_ADD(PARAM_FLOAT, k48, &K[3][7])
-
-PARAM_ADD(PARAM_FLOAT, k19, &K[0][8])
-PARAM_ADD(PARAM_FLOAT, k29, &K[1][8])
-PARAM_ADD(PARAM_FLOAT, k39, &K[2][8])
-PARAM_ADD(PARAM_FLOAT, k49, &K[3][8])
-
-PARAM_ADD(PARAM_FLOAT, k110, &K[0][9])
-PARAM_ADD(PARAM_FLOAT, k210, &K[1][9])
-PARAM_ADD(PARAM_FLOAT, k310, &K[2][9])
-PARAM_ADD(PARAM_FLOAT, k410, &K[3][9])
-
-PARAM_ADD(PARAM_FLOAT, k111, &K[0][10])
-PARAM_ADD(PARAM_FLOAT, k211, &K[1][10])
-PARAM_ADD(PARAM_FLOAT, k311, &K[2][10])
-PARAM_ADD(PARAM_FLOAT, k411, &K[3][10])
-
-PARAM_ADD(PARAM_FLOAT, k112, &K[0][11])
-PARAM_ADD(PARAM_FLOAT, k212, &K[1][11])
-PARAM_ADD(PARAM_FLOAT, k312, &K[2][11])
-PARAM_ADD(PARAM_FLOAT, k412, &K[3][11])
+PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
 
 PARAM_GROUP_STOP(ctrlLQR)
 
