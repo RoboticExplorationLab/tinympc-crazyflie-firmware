@@ -245,34 +245,34 @@ void MatScale(Matrix A, sfloat alpha) {
 }
 
 void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
-  // int n = A.rows;
-  // int m = A.cols;
-  // int p = B.cols;
-  // sfloat Aik;
-  // sfloat Bkj;
-  // sfloat Cij;
-  // int ij;
-  // for (int i = 0; i < n; ++i) {
-  //   for (int j = 0; j < p; ++j) {
-  //     ij = i + j * n;
-  //     Cij = 0;
-  //     for (int k = 0; k < m; ++k) {  // columns of A, rows of B
-  //       Aik = A.data[i + n * k];
-  //       Bkj = B.data[k + m * j];
-  //       Cij += Aik * Bkj;
-  //     }
-  //     C.data[ij] = alpha * Cij + beta * C.data[ij];
-  //   }
-  // }
-
   int n = A.rows;
   int m = A.cols;
   int p = B.cols;
+  sfloat Aik;
+  sfloat Bkj;
+  sfloat Cij;
+  int ij;
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < p; ++j) {
+      ij = i + j * n;
+      Cij = 0;
+      for (int k = 0; k < m; ++k) {  // columns of A, rows of B
+        Aik = A.data[i + n * k];
+        Bkj = B.data[k + m * j];
+        Cij += Aik * Bkj;
+      }
+      C.data[ij] = alpha * Cij + beta * C.data[ij];
+    }
+  }
 
-  Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p) = 
-      beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p)
-      + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, m, n) 
-      * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, n, p);
+  // int n = A.rows;
+  // int m = A.cols;
+  // int p = B.cols;
+
+  // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p)
+  //     + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, m, n) 
+  //     * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, n, p);
 
   // slap_MatMulAdd(C, A, B, alpha, beta);
 }

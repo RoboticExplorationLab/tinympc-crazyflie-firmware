@@ -163,11 +163,14 @@ tiny_AdmmWorkspace work;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-#define U_HOVER (36.0f / 60.0f);  // pwm, = weight/max thrust 
+uint32_t mpcTime = 0;
+float u_hover = 0.6f;
+
 float setpoint_z = 0.1f;
 float setpoint_x = 0.0f;
 int z_sign = 1;
 int8_t result = 0;
+
 void controllerOutOfTreeInit(void) {
   // if (isInit) {
   //   return;
@@ -239,6 +242,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   if (!RATE_DO_EXECUTE(MPC_RATE, tick)) {
     return;
   }
+  // Get current time
+  uint64_t startTimestamp = usecTimestamp();
 
   // Rule to take-off and land gradually
   // if (RATE_DO_EXECUTE(10, tick)) {    
@@ -269,9 +274,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xg_data[3] = phi.x;
   xg_data[4] = phi.y;
   xg_data[5] = phi.z;
-
-  // Get current time
-  // uint64_t startTimestamp = usecTimestamp();
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -301,13 +303,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   /* MPC solve */
   
   // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
-  tiny_ShiftFill(U, T_ARRAY_SIZE(U));
+  // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
-  uint32_t mpcTime = usecTimestamp() - startTimestamp;
+  mpcTime = usecTimestamp() - startTimestamp;
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
@@ -315,7 +317,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
   /* Output control */
@@ -325,19 +327,30 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = U[0].data[0] + U_HOVER;  // PWM 0..1
-    control->normalizedForces[1] = U[0].data[1] + U_HOVER;
-    control->normalizedForces[2] = U[0].data[2] + U_HOVER;
-    control->normalizedForces[3] = U[0].data[3] + U_HOVER;
+    control->normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+    control->normalizedForces[1] = U[0].data[1] + u_hover;
+    control->normalizedForces[2] = U[0].data[2] + u_hover;
+    control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
 
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
+
+/**
+ * Tunning variables for the full state quaternion LQR controller
+ */
+// PARAM_GROUP_START(ctrlMPC)
+// /**
+//  * @brief K gain
+//  */
+// PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+
+// PARAM_GROUP_STOP(ctrlMPC)
 
 /**
  * Logging variables for the command and reference signals for the
@@ -363,6 +376,7 @@ LOG_ADD(LOG_FLOAT, wpitch, &x0_data[10])
 LOG_ADD(LOG_FLOAT, wyaw,   &x0_data[11])
 
 LOG_ADD(LOG_INT8, result, &result)
+LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
 LOG_ADD(LOG_FLOAT, u0, &(U_data[0]))
 LOG_ADD(LOG_FLOAT, u1, &(U_data[1]))
