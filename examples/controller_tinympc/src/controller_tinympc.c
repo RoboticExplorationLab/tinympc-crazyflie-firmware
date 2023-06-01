@@ -65,13 +65,11 @@ void appMain() {
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define NSIM 500      // length of reference trajectory
+#define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_50_HZ  // control frequency
 
 // #include "params_50hz_agg.h"
 #include "params_50hz.h"
-
-#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 
@@ -120,8 +118,8 @@ static sfloat umax_data[NINPUTS] = {0.0f};
 static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
-static Matrix Xref[NSTATES*NHORIZON];
-static Matrix Uref[NINPUTS*(NHORIZON - 1)];
+static Matrix Xref[NSIM];
+static Matrix Uref[NSIM - 1];
 static Matrix X[NHORIZON];
 static Matrix U[NHORIZON - 1];
 static Matrix d[NHORIZON - 1];
@@ -146,21 +144,19 @@ tiny_AdmmWorkspace work;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-#define U_HOVER (36.0f / 60.0f);  // pwm, = weight/max thrust 
+uint32_t mpcTime = 0;
+float u_hover = 0.6f;
+
 float setpoint_z = 0.1f;
 float setpoint_x = 0.0f;
 int z_sign = 1;
 int8_t result = 0;
+
 void controllerOutOfTreeInit(void) {
   // if (isInit) {
   //   return;
   // }
-  for (int i = 0; i < NSIM; ++i) {
-    if (i < NSIM - 1) {
-      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
-    }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
-  }
+
   /* Start MPC initialization*/
   
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
@@ -202,12 +198,17 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 5;           // limit this if needed
+  stgs.max_iter = 1;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
   stgs.tol_abs_dual = 10e-2;
   stgs.tol_abs_prim = 10e-2;
 
+  setpoint_z = 0.1f;
+  setpoint_x = 0.0f;
+  z_sign = 1;
+
+  // isInit = true;
   /* End of MPC initialization */  
 }
 
@@ -222,8 +223,21 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   if (!RATE_DO_EXECUTE(MPC_RATE, tick)) {
     return;
   }
+  // Get current time
+  uint64_t startTimestamp = usecTimestamp();
+
+  // Rule to take-off and land gradually
+  // if (RATE_DO_EXECUTE(10, tick)) {    
+  //   setpoint_z += z_sign * 0.1f;
+  //   if (setpoint_z > 1.0f) z_sign = -1;
+  //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
+  //   setpoint_x += 1.0f;
+  //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
+  // }
 
   /* Get goal state (reference) */
+  // xg_data[0]  = setpoint_x; 
+  // xg_data[2]  = setpoint_z; 
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
   xg_data[2]  = setpoint->position.z;
@@ -241,9 +255,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xg_data[3] = phi.x;
   xg_data[4] = phi.y;
   xg_data[5] = phi.z;
-
-  // Get current time
-  // uint64_t startTimestamp = usecTimestamp();
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -279,14 +290,14 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
-  // uint32_t mpcTime = usecTimestamp() - startTimestamp;
+  mpcTime = usecTimestamp() - startTimestamp;
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-  result =  info.status_val * info.iter;
+  // result =  info.status_val * info.iter;
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
@@ -297,19 +308,30 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = U[0].data[0] + U_HOVER;  // PWM 0..1
-    control->normalizedForces[1] = U[0].data[1] + U_HOVER;
-    control->normalizedForces[2] = U[0].data[2] + U_HOVER;
-    control->normalizedForces[3] = U[0].data[3] + U_HOVER;
+    control->normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+    control->normalizedForces[1] = U[0].data[1] + u_hover;
+    control->normalizedForces[2] = U[0].data[2] + u_hover;
+    control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
 
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
+
+/**
+ * Tunning variables for the full state quaternion LQR controller
+ */
+PARAM_GROUP_START(ctrlMPC)
+/**
+ * @brief K gain
+ */
+PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+
+PARAM_GROUP_STOP(ctrlMPC)
 
 /**
  * Logging variables for the command and reference signals for the
@@ -335,6 +357,7 @@ LOG_ADD(LOG_FLOAT, wpitch, &x0_data[10])
 LOG_ADD(LOG_FLOAT, wyaw,   &x0_data[11])
 
 LOG_ADD(LOG_INT8, result, &result)
+LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
 LOG_ADD(LOG_FLOAT, u0, &(U_data[0]))
 LOG_ADD(LOG_FLOAT, u1, &(U_data[1]))
