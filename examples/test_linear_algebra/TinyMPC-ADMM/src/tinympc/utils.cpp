@@ -240,18 +240,18 @@ void MatAdd(Matrix C, Matrix A, Matrix B, sfloat alpha) {
 }
 
 void MatCpy(Matrix des, Matrix src) {
-  // for (int i = 0; i < des.cols * des.rows; ++i) {
-  //   des.data[i] = src.data[i];
-  // }
-  arm_copy_f32((float32_t *)(src.data), (float32_t *)(des.data), des.cols * des.rows);
+  for (int i = 0; i < des.cols * des.rows; ++i) {
+    des.data[i] = src.data[i];
+  }
+  // arm_copy_f32((float32_t *)(src.data), (float32_t *)(des.data), des.cols * des.rows);
 }
 
 void MatScale(Matrix A, sfloat alpha) {
-  // for (int i = 0; i < A.cols * A.rows; ++i) {
-  //   A.data[i] = A.data[i] * alpha;
-  // }
-  arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
-  mat_scale(&A_, alpha, &A_);
+  for (int i = 0; i < A.cols * A.rows; ++i) {
+    A.data[i] = A.data[i] * alpha;
+  }
+  // arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
+  // mat_scale(&A_, alpha, &A_);
 }
 
 void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
