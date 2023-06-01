@@ -49,15 +49,15 @@
  */
 
 // #ifdef SLAP_BACKEND_EIGEN
-#ifdef __cplusplus
-extern "C" {
-#endif
-enum slap_ErrorCode slap_MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
-#ifdef __cplusplus
-}
-#endif
-// #else
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 // enum slap_ErrorCode slap_MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
+// #ifdef __cplusplus
+// }
+// #endif
+// #else
+enum slap_ErrorCode slap_MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
 // #endif
 
 /**

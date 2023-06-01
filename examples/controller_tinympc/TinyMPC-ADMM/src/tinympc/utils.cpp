@@ -1,6 +1,7 @@
 #include "utils.h"
 
-#include <Eigen/Dense>
+// #include <Eigen/Dense>
+#include <cf_math.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -230,23 +231,32 @@ void MatAdd(Matrix C, Matrix A, Matrix B, sfloat alpha) {
   for (int i = 0; i < C.cols * C.rows; ++i) {
     C.data[i] = A.data[i] + B.data[i] * alpha;
   }
+  // if (alpha == 1.0f) {
+  //   arm_matrix_instance_f32 C_ = {C.rows, C.cols, (float32_t *)(C.data)};
+  //   arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
+  //   arm_matrix_instance_f32 B_ = {B.rows, B.cols, (float32_t *)(B.data)};
+  //   arm_mat_add_f32(&A_, &B_, &C_);
+  // }
 }
 
 void MatCpy(Matrix des, Matrix src) {
-  for (int i = 0; i < des.cols * des.rows; ++i) {
-    des.data[i] = src.data[i];
-  }
+  // for (int i = 0; i < des.cols * des.rows; ++i) {
+  //   des.data[i] = src.data[i];
+  // }
+  arm_copy_f32((float32_t *)(src.data), (float32_t *)(des.data), des.cols * des.rows);
 }
 
 void MatScale(Matrix A, sfloat alpha) {
-  for (int i = 0; i < A.cols * A.rows; ++i) {
-    A.data[i] = A.data[i] * alpha;
-  }
+  // for (int i = 0; i < A.cols * A.rows; ++i) {
+  //   A.data[i] = A.data[i] * alpha;
+  // }
+  arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
+  mat_scale(&A_, alpha, &A_);
 }
 
 void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
   int n = A.rows;
-  int m = A.cols;
+  int m = A.cols; 
   int p = B.cols;
   sfloat Aik;
   sfloat Bkj;
@@ -266,13 +276,13 @@ void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
   }
 
   // int n = A.rows;
-  // int m = A.cols;
+  // int m = A.cols;  // = B.rows
   // int p = B.cols;
 
-  // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p) = 
-  //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, m, p)
-  //     + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, m, n) 
-  //     * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, n, p);
+  // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m) 
+  //     * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p);
 
   // slap_MatMulAdd(C, A, B, alpha, beta);
 }
