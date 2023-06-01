@@ -64,7 +64,7 @@ void appMain() {
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
 #define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
-#define LQR_RATE RATE_100_HZ  // control frequency
+#define LQR_RATE RATE_250_HZ  // control frequency
 #define U_HOVER (38.0f / 60.0f);  // pwm, = weight/max thrust 
 // PID: thrust_base = 0.55 pwm
 #define NSIM 500
