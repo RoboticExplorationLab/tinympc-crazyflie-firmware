@@ -1,6 +1,6 @@
 config DECK_ACTIVE_MARKER
     bool "Support the Active marker deck"
-    default y
+    default n
     help
         The Active marker deck together with Qualisys QTM gives you long
         distance and solid tracking. Thanks to the 4 high-power LEDs you
@@ -12,7 +12,7 @@ config DECK_AI
     bool "Support the AI deck"
     select ENABLE_CPX
     select ENABLE_CPX_ON_UART2
-    default y
+    default n
     help
         The AI-deck 1.1 extends the computational capabilities and will
         enable complex artificial intelligence-based workloads to run
@@ -87,7 +87,7 @@ config DECK_BIGQUAD_ENABLE_PM
 
 config DECK_BUZZ
     bool "Support the Buzzer deck"
-    default y
+    default n
     help
         Sometimes LED feedback isn’t enough, like when you’re flying
         around in a lab and living room. With the Buzzer deck you’ll get
@@ -199,7 +199,7 @@ config DECK_GTGPS
 
 config DECK_LEDRING
     bool "Support the LED-ring deck"
-    default y
+    default n
     help
         Light up the dark with custom patterns using the Crazyflie 2.1
         LED-ring expansion board. Featuring 12 strong RGB LEDs facing
@@ -240,7 +240,7 @@ config DECK_LEDRING_DIMMER
 
 config DECK_LIGHTHOUSE
     bool "Support the Lighthouse positioning deck"
-    default y
+    default n
     depends on !DEBUG_PRINT_ON_UART1
     select ESTIMATOR_KALMAN_ENABLE
     help
@@ -272,7 +272,7 @@ config DECK_LIGHTHOUSE_MAX_N_BS
 
 config DECK_LOCO
     bool "Support the Loco positioning deck"
-    default y
+    default n
     select ESTIMATOR_KALMAN_ENABLE
     help
         The Loco Positioning deck is a Tag in a Loco Positioning system
@@ -368,7 +368,7 @@ config DECK_LOCO_2D_POSITION_HEIGHT
 
 config DECK_MULTIRANGER
     bool "Support the Multi-ranger deck"
-    default y
+    default n
     help
         The Multi-ranger deck  gives the Crazyflie 2.X the ability to
         detect objects around it. This is done by measuring the distance
@@ -377,7 +377,7 @@ config DECK_MULTIRANGER
 
 config DECK_OA
     bool "Support the Obstacle avoidance deck (obsolete)"
-    default y
+    default n
     help
         Codename: Obstacle Avoidance driver, obsolete deck.
 
@@ -417,7 +417,7 @@ config DECK_ZRANGER
 
 config DECK_ZRANGER2
     bool "Support the Z-ranger deck V2"
-    default y
+    default n
     help
         The Z-ranger deck V2 uses a laser sensor to measure the distance to
         the ground. The deck enables the Crazyflie to automatically maintain

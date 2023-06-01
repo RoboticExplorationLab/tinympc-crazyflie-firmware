@@ -44,6 +44,8 @@
 #include "num.h"
 #include "math3d.h"
 
+#include "traj_fig8.h"
+
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "CONTROLLER_LQR"
 #include "debug.h"
@@ -61,16 +63,19 @@ void appMain() {
 
 #define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
 #define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
-#define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
+#define NU  4   // no. control input          [thrust, torque_x, torque_y, torque_z] scaled by UINT16_MAX
 #define LQR_RATE RATE_100_HZ  // control frequency
+#define U_HOVER (38.0f / 60.0f);  // pwm, = weight/max thrust 
+// PID: thrust_base = 0.55 pwm
+#define NSIM 500
 
 // 100HZ
-// static float K[NU][NXt] = {
-//   {-0.185864f,0.180278f,0.461060f,-0.636400f,-0.701818f,-0.407242f,-0.119654f,0.113294f,0.223558f,-0.049461f,-0.060174f,-0.269965f},
-//   {0.183541f,0.166895f,0.461060f,-0.528924f,0.682786f,0.422112f,0.117279f,0.101126f,0.223558f,-0.033619f,0.058320f,0.277318f},
-//   {0.159443f,-0.169782f,0.461060f,0.549587f,0.484211f,-0.458550f,0.095884f,-0.103829f,0.223558f,0.035573f,0.025417f,-0.295330f},
-//   {-0.157121f,-0.177391f,0.461060f,0.615736f,-0.465178f,0.443680f,-0.093509f,-0.110590f,0.223558f,0.047506f,-0.023563f,0.287977f},
-// };
+static float K[NU][NXt] = {
+  {-0.185864f,0.180278f,0.461060f,-0.636400f,-0.701818f,-0.407242f,-0.119654f,0.113294f,0.223558f,-0.049461f,-0.060174f,-0.269965f},
+  {0.183541f,0.166895f,0.461060f,-0.528924f,0.682786f,0.422112f,0.117279f,0.101126f,0.223558f,-0.033619f,0.058320f,0.277318f},
+  {0.159443f,-0.169782f,0.461060f,0.549587f,0.484211f,-0.458550f,0.095884f,-0.103829f,0.223558f,0.035573f,0.025417f,-0.295330f},
+  {-0.157121f,-0.177391f,0.461060f,0.615736f,-0.465178f,0.443680f,-0.093509f,-0.110590f,0.223558f,0.047506f,-0.023563f,0.287977f},
+};
 
 // 50HZ
 // static float K[NU][NXt] = {
@@ -79,32 +84,22 @@ void appMain() {
 //   {0.081775f,-0.090862f,0.561104f,0.371276f,0.303009f,-0.474485f,0.059959f,-0.068186f,0.247898f,0.024029f,0.013571f,-0.293212f},
 //   {-0.080207f,-0.097581f,0.561104f,0.439507f,-0.286714f,0.459201f,-0.058116f,-0.075086f,0.247898f,0.036236f,-0.011901f,0.285906f},
 // };
-static float K[NU][NXt] = {
-  {-0.331565f,0.330591f,0.428867f,-0.717416f,-0.760102f,-0.850880f,-0.182481f,0.179291f,0.241446f,-0.047415f,-0.056629f,-0.248436f},
-  {0.324489f,0.320604f,0.428867f,-0.638375f,0.737373f,0.854866f,0.177808f,0.169928f,0.241446f,-0.033569f,0.054904f,0.247177f},
-  {0.324793f,-0.327876f,0.428867f,0.661422f,0.620130f,-0.864462f,0.171002f,-0.174697f,0.241446f,0.035308f,0.026362f,-0.244064f},
-  {-0.317718f,-0.323319f,0.428867f,0.694369f,-0.597400f,0.860476f,-0.166329f,-0.174522f,0.241446f,0.045676f,-0.024637f,0.245322f},
-};
 // static float K[NU][NXt] = {
-//   {-0.209415f,0.190469f,0.471501f,-0.643639f,-0.716745f,-0.335579f,-0.130498f,0.118040f,0.224146f,-0.046397f,-0.052328f,-0.182753f},
-//   {0.207305f,0.160584f,0.471501f,-0.527361f,0.705213f,0.368519f,0.128825f,0.098303f,0.224146f,-0.036927f,0.051228f,0.199755f},
-//   {0.138321f,-0.163029f,0.471501f,0.539924f,0.449777f,-0.451224f,0.084350f,-0.100176f,0.224146f,0.038094f,0.031069f,-0.242445f},
-//   {-0.136211f,-0.188024f,0.471501f,0.631076f,-0.438245f,0.418285f,-0.082677f,-0.116168f,0.224146f,0.045230f,-0.029969f,0.225443f},
+//   {-0.089412f,0.084394f,0.561104f,-0.475665f,-0.542625f,-0.708036f,-0.077112f,0.070987f,0.247898f,-0.043822f,-0.055214f,-0.301843f},
+//   {0.086423f,0.072629f,0.561104f,-0.359315f,0.521945f,0.729571f,0.074341f,0.058631f,0.247898f,-0.026304f,0.053217f,0.307663f},
+//   {0.067816f,-0.075797f,0.561104f,0.380735f,0.304785f,-0.780548f,0.053401f,-0.061537f,0.247898f,0.028353f,0.016502f,-0.321421f},
+//   {-0.064828f,-0.081226f,0.561104f,0.454245f,-0.284105f,0.759012f,-0.050631f,-0.068082f,0.247898f,0.041773f,-0.014505f,0.315601f},
 // };
 
 static float x_error[NXt];  
 static float control_input[NU];
-static float u_hover = 0.6f;  // ~ mass/max_thrust
 
 // Struct for logging position information
-static bool isInit = false;
+static int trajCounter;
+static bool trajStart = 0;
 
 void controllerOutOfTreeInit(void) {
-  if (isInit) {
-    return;
-  }
-
-  isInit = true;
+  trajCounter = 0;
 }
 
 bool controllerOutOfTreeTest() {
@@ -117,12 +112,25 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
     return;
   }
-  // Positon error, [m]
-  x_error[0] = state->position.x - 1*setpoint->position.x;
-  x_error[1] = state->position.y - 1*setpoint->position.y;
-  x_error[2] = state->position.z - 1*setpoint->position.z;
 
-  // Frame velocity error, [m/s]                          
+  if (trajStart) {
+    x_error[0] = state->position.x - X_ref_data[trajCounter*3 + 0];
+    x_error[1] = state->position.y - X_ref_data[trajCounter*3 + 1];
+    x_error[2] = state->position.z - X_ref_data[trajCounter*3 + 2]; 
+    trajCounter += 1;
+    if (trajCounter == NSIM) {
+      trajStart = 0;
+      trajCounter = 0;
+    }
+  }
+  else {
+    // Positon error, [m]
+    x_error[0] = state->position.x - 1*setpoint->position.x;
+    x_error[1] = state->position.y - 1*setpoint->position.y;
+    x_error[2] = state->position.z - 1*setpoint->position.z;
+  }
+
+  // Body velocity error, [m/s]                          
   x_error[6] = state->velocity.x - 1*setpoint->velocity.x;
   x_error[7] = state->velocity.y - 1*setpoint->velocity.y;
   x_error[8] = state->velocity.z - 1*setpoint->velocity.z;
@@ -147,7 +155,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  // current attitude (right pitch)
+    state->attitudeQuaternion.w);  // current attitude
 
   struct quat attitude_gI = qinv(attitude_g);  
   struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
@@ -176,10 +184,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = control_input[0] + u_hover;  // PWM 0..1
-    control->normalizedForces[1] = control_input[1] + u_hover;
-    control->normalizedForces[2] = control_input[2] + u_hover;
-    control->normalizedForces[3] = control_input[3] + u_hover;
+    control->normalizedForces[0] = control_input[0] + U_HOVER;  // PWM 0..1
+    control->normalizedForces[1] = control_input[1] + U_HOVER;
+    control->normalizedForces[2] = control_input[2] + U_HOVER;
+    control->normalizedForces[3] = control_input[3] + U_HOVER;
   } 
 
   // control->normalizedForces[0] = 0.0f;
@@ -197,7 +205,7 @@ PARAM_GROUP_START(ctrlLQR)
 /**
  * @brief K gain
  */
-PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+PARAM_ADD(PARAM_1BYTE, trajStart, &trajStart)
 
 PARAM_GROUP_STOP(ctrlLQR)
 

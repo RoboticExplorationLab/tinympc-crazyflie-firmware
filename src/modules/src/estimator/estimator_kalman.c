@@ -227,7 +227,7 @@ static void kalmanTask(void* parameters) {
     kalmanCoreDecoupleXY(&coreData);
   #endif
 
-    // Run the system dynamics to predict the state forward.
+    // Run the system dynamics to predict the state forward, at PREDICT_RATE
     if (nowMs >= nextPredictionMs) {
       axis3fSubSamplerFinalize(&accSubSampler);
       axis3fSubSamplerFinalize(&gyroSubSampler);

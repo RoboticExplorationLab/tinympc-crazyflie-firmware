@@ -13,7 +13,7 @@
 
 // The maximum number of other Crazyflie ID's to track. This constant may be
 // needed for static allocations in other modules, e.g. collision avoidance.
-#define PEER_LOCALIZATION_MAX_NEIGHBORS 10
+#define PEER_LOCALIZATION_MAX_NEIGHBORS 1
 
 // Initialize and test the module.
 void peerLocalizationInit();
