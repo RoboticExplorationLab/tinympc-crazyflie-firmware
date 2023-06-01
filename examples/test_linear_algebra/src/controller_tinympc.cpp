@@ -26,8 +26,7 @@
  */
 
 // 50HZ
-
-// #include <Eigen.h>
+#include <Eigen/Dense>
 
 #ifdef __cplusplus
 extern "C" {
@@ -149,44 +148,14 @@ static float Bt_data[NSTATES*NINPUTS] = {
 
 static float C_data[NSTATES*NINPUTS] = {0.0f};
 
-static float f_data[NSTATES] = {0};
-
-// Create data array, all zero initialization
-static float x0_data[NSTATES] = {0.0f};       // initial state
-static float xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
-static float ug_data[NINPUTS] = {0.0f};       // goal input 
-static float X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
-static float U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
-static float d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static float p_data[NSTATES * NHORIZON] = {0.0f};
-// static float Q_data[NSTATES * NSTATES] = {0.0f};
-// static float R_data[NINPUTS * NINPUTS] = {0.0f};
-static float q_data[NSTATES*(NHORIZON-1)] = {0.0f};
-static float r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static float r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static float Acu_data[NINPUTS * NINPUTS] = {0.0f};  
-static float YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static float umin_data[NINPUTS] = {0.0f};
-static float umax_data[NINPUTS] = {0.0f};
-static float temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
-
-// Created matrices
-static Matrix Xref[NSIM];
-static Matrix Uref[NSIM - 1];
-static Matrix X[NHORIZON];
-static Matrix U[NHORIZON - 1];
-static Matrix d[NHORIZON - 1];
-static Matrix p[NHORIZON];
-static Matrix YU[NHORIZON - 1];
-static Matrix ZU[NHORIZON - 1];
-static Matrix ZU_new[NHORIZON - 1];
-static Matrix q[NHORIZON-1];
-static Matrix r[NHORIZON-1];
-static Matrix r_tilde[NHORIZON-1];
 static Matrix A;
 static Matrix B;
 static Matrix C;
 static Matrix f;
+
+static Eigen::Matrix<float, NSTATES, NSTATES> A_ei;
+static Eigen::Matrix<float, NSTATES, NINPUTS> B_ei;
+static Eigen::Matrix<float, NSTATES, NINPUTS> C_ei;
 
 arm_matrix_instance_f32 A_arm;
 arm_matrix_instance_f32 B_arm;
@@ -196,8 +165,11 @@ arm_matrix_instance_f32 C_arm;
 static bool isInit = false;  // fix for tracking problem
 uint32_t time1 = 0;
 uint32_t time2 = 0;
+uint32_t time3 = 0;
 float res = 0;
 uint64_t startTimestamp = 0;
+float ratio1 = 0.0;
+float ratio2 = 0.0;
 
 void controllerOutOfTreeInit(void) {
 }
@@ -220,27 +192,45 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   A = slap_MatrixFromArray(NSTATES, NSTATES, A_data);
   B = slap_MatrixFromArray(NSTATES, NINPUTS, B_data);
   C = slap_MatrixFromArray(NSTATES, NINPUTS, C_data);
+  A_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NSTATES>>(A_data, NSTATES, NSTATES);
+  B_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(B_data, NSTATES, NINPUTS);
+  C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
 
   // Get current time
   startTimestamp = usecTimestamp();
-  for (int i = 0; i < 50; ++i) {
-    // mat_mult(&A_arm, &B_arm, &C_arm);
+  for (int i = 0; i < 3; ++i) {
+    mat_mult(&A_arm, &B_arm, &C_arm);
     // arm_mat_add_f32(&B_arm, &B_arm, &C_arm);
-    arm_copy_f32(B.data, C.data, B.cols * B.rows);
+    // arm_copy_f32(B.data, C.data, B.cols * B.rows);
+    // mat_scale(&C_arm, 10.0f, &C_arm);
   }
   time1 = usecTimestamp() - startTimestamp;
   float res1 = slap_NormTwo(C);
 
   startTimestamp = usecTimestamp();
-  for (int i = 0; i < 50; ++i) {
-    // slap_MatMulAB(C, A, B);
-    // MatAdd(C, B, B, 1.0);
-    MatCpy(C, B);
+  for (int i = 0; i < 3; ++i) {
+    C_ei = A_ei.lazyProduct(B_ei);
+    // C_ei = B_ei + B_ei;
+    // C_ei = B_ei;
+    // C_ei = 10.0f * B_ei;
   }  
   time2 = usecTimestamp() - startTimestamp;
-  float res2 = slap_NormTwo(C);
+  float res2 = C_ei.norm();
+
+  startTimestamp = usecTimestamp();
+  for (int k = 0; k < 3; ++k) {
+    slap_MatMulAB(C, A, B);
+    // MatAdd(C, B, B, 1.0);
+    // MatCpy(C, B);
+    // MatScale(C, 10.0f);
+  }  
+  time3 = usecTimestamp() - startTimestamp;
+  // float res2 = slap_NormTwo(C);
 
   res = res1 - res2;
+
+  ratio1 = float(time3)/time1;
+  ratio2 = float(time3)/time2;
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
@@ -277,8 +267,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
 LOG_GROUP_START(ctrlMPC)
 LOG_ADD(LOG_FLOAT, res, &res)
-LOG_ADD(LOG_UINT32, time1, &time1)
-LOG_ADD(LOG_UINT32, time2, &time2)
+LOG_ADD(LOG_FLOAT, ratio1, &ratio1)
+LOG_ADD(LOG_FLOAT, ratio2, &ratio2)
 LOG_GROUP_STOP(ctrlMPC)
 
 #ifdef __cplusplus

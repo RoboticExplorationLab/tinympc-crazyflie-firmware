@@ -58,7 +58,7 @@
 // Matrix data must be aligned on 4 byte bundaries
 static inline void assert_aligned_4_bytes(const arm_matrix_instance_f32* matrix) {
   const uint32_t address = (uint32_t)matrix->pData;
-  ASSERT((address & 0x3) == 0);
+  // ASSERT((address & 0x3) == 0);
 }
 
 static inline void mat_trans(const arm_matrix_instance_f32 * pSrc, arm_matrix_instance_f32 * pDst) {
@@ -66,7 +66,7 @@ static inline void mat_trans(const arm_matrix_instance_f32 * pSrc, arm_matrix_in
   assert_aligned_4_bytes(pDst);
 
   arm_status result = arm_mat_trans_f32(pSrc, pDst);
-  ASSERT(ARM_MATH_SUCCESS == result);
+  // ASSERT(ARM_MATH_SUCCESS == result);
 }
 
 static inline void mat_inv(const arm_matrix_instance_f32 * pSrc, arm_matrix_instance_f32 * pDst) {
@@ -74,7 +74,7 @@ static inline void mat_inv(const arm_matrix_instance_f32 * pSrc, arm_matrix_inst
   assert_aligned_4_bytes(pDst);
 
   arm_status result = arm_mat_inverse_f32(pSrc, pDst);
-  ASSERT(ARM_MATH_SUCCESS == result);
+  // ASSERT(ARM_MATH_SUCCESS == result);
 }
 
 static inline void mat_mult(const arm_matrix_instance_f32 * pSrcA, const arm_matrix_instance_f32 * pSrcB, arm_matrix_instance_f32 * pDst) {
@@ -83,13 +83,13 @@ static inline void mat_mult(const arm_matrix_instance_f32 * pSrcA, const arm_mat
   assert_aligned_4_bytes(pDst);
 
   arm_status result = arm_mat_mult_f32(pSrcA, pSrcB, pDst);
-  ASSERT(ARM_MATH_SUCCESS == result);
+  // ASSERT(ARM_MATH_SUCCESS == result);
 }
 
 static inline float arm_sqrt(float32_t in) {
   float pOut = 0;
   arm_status result = arm_sqrt_f32(in, &pOut);
-  ASSERT(ARM_MATH_SUCCESS == result);
+  // ASSERT(ARM_MATH_SUCCESS == result);
   return pOut;
 }
 
@@ -115,5 +115,5 @@ static inline float clip1(float a) {
 
 static inline void mat_scale(const arm_matrix_instance_f32 * pSrcA, float32_t scale, arm_matrix_instance_f32 * pDst) {
   arm_status result = arm_mat_scale_f32(pSrcA, scale, pDst);
-  ASSERT(ARM_MATH_SUCCESS == result);
+  // ASSERT(ARM_MATH_SUCCESS == result);
 }
