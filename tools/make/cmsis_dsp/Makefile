@@ -21,7 +21,7 @@ VPATH += $(DSP_SRC)/TransformFunctions/
 
 LIB=$(PROJ_BIN)/libarm_math.a
 
-CFLAGS = -O2 -I$(CMSIS_INC) -I$(DSP_INC) -std=c11
+CFLAGS = -O3 -I$(CMSIS_INC) -I$(DSP_INC) -std=c11  #-O2
 CFLAGS += -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16
 CFLAGS += -DARM_MATH_CM4 -D__FPU_PRESENT=1 -ffunction-sections -fdata-sections
 

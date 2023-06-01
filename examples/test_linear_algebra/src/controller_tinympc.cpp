@@ -196,33 +196,35 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   B_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(B_data, NSTATES, NINPUTS);
   C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
 
+  int nsamples = 10;
+
   // Get current time
   startTimestamp = usecTimestamp();
-  for (int i = 0; i < 3; ++i) {
-    mat_mult(&A_arm, &B_arm, &C_arm);
+  for (int i = 0; i < nsamples; ++i) {
+    // mat_mult(&A_arm, &B_arm, &C_arm);
     // arm_mat_add_f32(&B_arm, &B_arm, &C_arm);
     // arm_copy_f32(B.data, C.data, B.cols * B.rows);
-    // mat_scale(&C_arm, 10.0f, &C_arm);
+    mat_scale(&C_arm, 10.0f, &C_arm);
   }
   time1 = usecTimestamp() - startTimestamp;
   float res1 = slap_NormTwo(C);
 
   startTimestamp = usecTimestamp();
-  for (int i = 0; i < 3; ++i) {
-    C_ei = A_ei.lazyProduct(B_ei);
+  for (int i = 0; i < nsamples; ++i) {
+    // C_ei = A_ei.lazyProduct(B_ei);
     // C_ei = B_ei + B_ei;
     // C_ei = B_ei;
-    // C_ei = 10.0f * B_ei;
+    // C_ei = 10.0f * C_ei; 
   }  
   time2 = usecTimestamp() - startTimestamp;
   float res2 = C_ei.norm();
 
   startTimestamp = usecTimestamp();
-  for (int k = 0; k < 3; ++k) {
-    slap_MatMulAB(C, A, B);
+  for (int k = 0; k < nsamples; ++k) {
+    // slap_MatMulAB(C, A, B);
     // MatAdd(C, B, B, 1.0);
     // MatCpy(C, B);
-    // MatScale(C, 10.0f);
+    MatScale(C, 10.0f);
   }  
   time3 = usecTimestamp() - startTimestamp;
   // float res2 = slap_NormTwo(C);
@@ -267,8 +269,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
 LOG_GROUP_START(ctrlMPC)
 LOG_ADD(LOG_FLOAT, res, &res)
-LOG_ADD(LOG_FLOAT, ratio1, &ratio1)
-LOG_ADD(LOG_FLOAT, ratio2, &ratio2)
+LOG_ADD(LOG_UINT32, time1, &time1)
+LOG_ADD(LOG_UINT32, time2, &time2)
+LOG_ADD(LOG_UINT32, time3, &time3)
 LOG_GROUP_STOP(ctrlMPC)
 
 #ifdef __cplusplus
