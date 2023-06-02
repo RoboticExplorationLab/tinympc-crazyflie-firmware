@@ -147,6 +147,7 @@ static float Bt_data[NSTATES*NINPUTS] = {
 };
 
 static float C_data[NSTATES*NINPUTS] = {0.0f};
+static float Ct_data[NSTATES*NINPUTS] = {0.0f};
 
 static Matrix A;
 static Matrix B;
@@ -189,13 +190,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   A_arm = {NSTATES, NSTATES, At_data};
   B_arm = {NSTATES, NINPUTS, Bt_data};
-  C_arm = {NSTATES, NINPUTS, C_data};
+  C_arm = {NSTATES, NINPUTS, Ct_data};
   A = slap_MatrixFromArray(NSTATES, NSTATES, A_data);
   B = slap_MatrixFromArray(NSTATES, NINPUTS, B_data);
   C = slap_MatrixFromArray(NSTATES, NINPUTS, C_data);
   A_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NSTATES>>(A_data, NSTATES, NSTATES);
   B_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(B_data, NSTATES, NINPUTS);
-  C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
+  // C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
   // C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
 
   int nsamples = 4;
@@ -210,13 +211,14 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
   time1 = usecTimestamp() - startTimestamp;
 
+  C_ei.setZero();
   startTimestamp = usecTimestamp();
   for (int i = 0; i < nsamples; ++i) {
     // C_ei = A_ei.lazyProduct(B_ei);
     // C_ei = B_ei + B_ei;
     // C_ei = B_ei;
     // C_ei = 10.0f * C_ei; 
-    C_ei = 5.0f * C_ei + 0.5f * A_ei.lazyProduct(B_ei);
+    C_ei = 0.1f * C_ei + 0.1f * A_ei.lazyProduct(B_ei);
   }  
   time2 = usecTimestamp() - startTimestamp;
   float res2 = C_ei.norm();
@@ -227,7 +229,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     // MatAdd(C, B, B, 1.0);
     // MatCpy(C, B);
     // MatScale(C, 10.0f);
-    MatMulAdd(C, A, B, 0.5f, 5.0f);
+    MatMulAdd(C, A, B, 0.1f, 0.1f);
   }  
   time3 = usecTimestamp() - startTimestamp;
   // float res2 = slap_NormTwo(C);

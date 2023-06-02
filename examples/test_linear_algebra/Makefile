@@ -25,7 +25,7 @@ EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/slap/src
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/Eigen
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/src
 EXTRA_CFLAGS += -DSLAP_FLOAT=float
-EXTRA_CFLAGS += -O3
+EXTRA_CFLAGS += -DEIGEN_INITIALIZE_MATRICES_BY_ZERO
 
 #
 # We override the default OOT_CONFIG here, we could also name our config
