@@ -25,7 +25,8 @@ CLOAD_ARGS        ?=
 ARCH := stm32f4
 SRCARCH := stm32f4
 
-ARCH_CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -g3
+ARCH_CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -funsafe-math-optimizations -g3
+# ARCH_CFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -g3
 ARCH_CFLAGS += -fno-math-errno -DARM_MATH_CM4 -D__FPU_PRESENT=1 -mfp16-format=ieee
 ARCH_CFLAGS += -Wno-array-bounds -Wno-stringop-overread
 ARCH_CFLAGS += -Wno-stringop-overflow
@@ -35,6 +36,7 @@ FREERTOS = $(srctree)/vendor/FreeRTOS
 PORT = $(FREERTOS)/portable/GCC/ARM_CM4F
 LIB = $(srctree)/src/lib
 PROCESSOR = -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+# PROCESSOR = -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
 LINKER_DIR = $(srctree)/tools/make/F405/linker
 
 LDFLAGS += --specs=nosys.specs --specs=nano.specs $(PROCESSOR) -nostdlib
@@ -114,7 +116,7 @@ PROG ?= $(PLATFORM)
 ifeq ($(CONFIG_DEBUG),y)
 ARCH_CFLAGS	+= -O0 -Wconversion
 else
-ARCH_CFLAGS += -Os
+ARCH_CFLAGS += -O3 -DNDEBUG
 endif
 
 # ifeq ($(CONFIG_DEBUG),y)

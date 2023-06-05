@@ -1,0 +1,2 @@
+obj-y += src/tinympc/
+obj-y += ext/slap/src/slap/
