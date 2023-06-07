@@ -1,10 +1,11 @@
 #ifndef CONSTANTS_H
 # define CONSTANTS_H
 
-# ifdef __cplusplus
-extern "C" {
-# endif // ifdef __cplusplus
-
+/******************
+* Problem Macros  *
+******************/
+# define NSTATES 12
+# define NINPUTS 4
 
 /************************************
 * Printing Constants to set Layout *
@@ -28,7 +29,7 @@ extern "C" {
 ******************/
 // Inherit from slap_ErrorCode and expand new errors for tinympc
 enum tiny_ErrorCode {
-  TINY_SLAP_ERROR = 0,
+  TINY_EIGEN_ERROR = 0,
   TINY_MATRIX_NOT_PSD,
   TINY_NO_ERROR,
   TINY_NOT_SUPPORTED,
@@ -64,7 +65,7 @@ enum tiny_ErrorCode {
 # define TOL_ABS_DUAL (1e-2)
 
 # define EN_CSTR_STATES (0)
-# define EN_CSTR_INPUTS (1)
+# define EN_CSTR_INPUTS (0)
 # define EN_CSTR_GOAL (0)
 
 # define VERBOSE (1)
@@ -75,35 +76,31 @@ enum tiny_ErrorCode {
 # define TIME_LIMIT (0.0)
 
 
-# ifndef TINY_NULL_MAT
-#  define TINY_NULL_MAT  \
-  ((Matrix){      \
-      0,          \
-      0,          \
-      0,          \
-      0,          \
-      TINY_NULL,       \
-      slap_DENSE, \
-  })
-# endif /* ifndef TINY_NULL_MAT */
+// # ifndef TINY_NULL_MAT
+// #  define TINY_NULL_MAT  \
+//   ((Matrix){      \
+//       0,          \
+//       0,          \
+//       0,          \
+//       0,          \
+//       TINY_NULL,       \
+//       slap_DENSE, \
+//   })
+// # endif /* ifndef TINY_NULL_MAT */
 
 # ifndef TINY_NULL
 #  define TINY_NULL 0
 # endif /* ifndef TINY_NULL */
 
 # ifndef TINY_NAN
-#  define TINY_NAN ((sfloat)0x7fc00000UL)  // not a number
+#  define TINY_NAN ((float)0x7fc00000UL)  // not a number
 # endif /* ifndef TINY_NAN */
 
 # ifndef TINY_INFTY
-#  define TINY_INFTY ((sfloat)1e30)        // infinity
+#  define TINY_INFTY ((float)1e30)        // infinity
 # endif /* ifndef TINY_INFTY */
 
 /* Printing */
 # define PRINT_INTERVAL 1
-
-# ifdef __cplusplus
-}
-# endif // ifdef __cplusplus
 
 #endif // ifndef CONSTANTS_H

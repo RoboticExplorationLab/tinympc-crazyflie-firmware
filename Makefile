@@ -116,7 +116,7 @@ PROG ?= $(PLATFORM)
 ifeq ($(CONFIG_DEBUG),y)
 ARCH_CFLAGS	+= -O0 -Wconversion
 else
-ARCH_CFLAGS += -O3 -DNDEBUG
+ARCH_CFLAGS += -Ofast -DNDEBUG
 endif
 
 # ifeq ($(CONFIG_DEBUG),y)
