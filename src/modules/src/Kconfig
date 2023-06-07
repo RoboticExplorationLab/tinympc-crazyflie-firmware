@@ -41,6 +41,11 @@ config CONTROLLER_BRESCIANINI
     help
         Use the Brescianini controller as default
 
+config CONTROLLER_TINYMPC
+    bool "TinyMPC controller"
+    help
+        Use the TinyMPC controller as default
+
 endchoice
 
 config CONTROLLER_OOT
