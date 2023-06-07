@@ -55,18 +55,18 @@ extern "C" {
 #define DEBUG_MODULE "CONTROLLER_TINYMPC"
 #include "debug.h"
 
-// #define nop()  __asm__("nop")
-// int _sbrk() { return -1; }
-// int _close() { return -1; }
-// int _read() { return -1; }
-// int _fstat() { return -1; }
-// int _isatty() { return -1; }
-// int _lseek() { return -1; }
+#define nop()  __asm__("nop")
+int _sbrk() { return -1; }
+int _close() { return -1; }
+int _read() { return -1; }
+int _fstat() { return -1; }
+int _isatty() { return -1; }
+int _lseek() { return -1; }
 
-// int _write(int file, char* ptr, int len)
-// {
-//    nop();
-// }
+int _write(int file, char* ptr, int len)
+{
+   nop();
+}
 
 void appMain() {
   DEBUG_PRINT("Waiting for activation ...\n");
@@ -286,7 +286,7 @@ void controllerOutOfTreeInit(void) {
   tiny_UpdateLinearCost(&work);
 
   /* Solver settings */
-  stgs.max_iter = 1;           // limit this if needed
+  stgs.max_iter = 2;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
   stgs.tol_abs_dual = 5e-2;
@@ -376,18 +376,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
-  // tiny_SolveAdmm(&work);
-  Uhrz[0] = -(Kinf) * (x0 - xg);
+  tiny_SolveAdmm(&work);
+  // Uhrz[0] = -(Kinf) * (x0 - xg);
   mpcTime = usecTimestamp() - startTimestamp;
 
   DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
-  DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU[0](0)), (double)(ZU[0](1)));
+  DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
-  DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(A(0,0)), (double)(x0(2)));
+  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(A(0,0)), (double)(x0(2)));
 
   /* Output control */
   if (setpoint->mode.z == modeDisable) {
