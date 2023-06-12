@@ -87,9 +87,6 @@ void appMain() {
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_50_HZ  // control frequency
 
-// #include "params_50hz_agg.h"
-#include "params_50hz.h"
-
 /* Allocate global variables for MPC */
 
 // Precompute data offline
@@ -196,12 +193,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   C = slap_MatrixFromArray(NSTATES, NINPUTS, C_data);
   A_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NSTATES>>(A_data, NSTATES, NSTATES);
   B_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(B_data, NSTATES, NINPUTS);
-  // C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
-  // C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
+  C_ei = Eigen::Map<Eigen::Matrix<float, NSTATES, NINPUTS>>(C_data, NSTATES, NINPUTS);
 
   int nsamples = 4;
 
-  // Get current time
+  // CMSIS-DSP
   startTimestamp = usecTimestamp();
   for (int i = 0; i < nsamples; ++i) {
     mat_mult(&A_arm, &B_arm, &C_arm);
@@ -211,6 +207,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
   time1 = usecTimestamp() - startTimestamp;
 
+  // Eigen
   C_ei.setZero();
   startTimestamp = usecTimestamp();
   for (int i = 0; i < nsamples; ++i) {
@@ -223,6 +220,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   time2 = usecTimestamp() - startTimestamp;
   float res2 = C_ei.norm();
 
+  // Ours naive
   startTimestamp = usecTimestamp();
   for (int k = 0; k < nsamples; ++k) {
     // slap_MatMulAB(C, A, B);
@@ -235,7 +233,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // float res2 = slap_NormTwo(C);
   float res1 = slap_NormTwo(C);
 
-  res = res1 - res2;
+  res = res1 - res2;  // Check correct answers
 
   ratio1 = float(time3)/time1;
   ratio2 = float(time3)/time2;
