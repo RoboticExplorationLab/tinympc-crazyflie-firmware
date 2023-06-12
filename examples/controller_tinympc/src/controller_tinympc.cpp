@@ -80,15 +80,15 @@ void appMain() {
 }
 
 // Macro variables
-#define DT 0.02f       // dt
-#define NSTATES 12    // no. of states (error state)
-#define NINPUTS 4     // no. of controls
-#define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define DT 0.002f       // dt
+// #define NSTATES 12    // no. of states (error state)
+// #define NINPUTS 4     // no. of controls
+#define NHORIZON 2   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
-#define MPC_RATE RATE_50_HZ  // control frequency
+#define MPC_RATE RATE_500_HZ  // control frequency
 
 // #include "params_50hz_agg.h"
-#include "params_50hz.h"
+#include "params_250hz.h"
 
 /* Allocate global variables for MPC */
 
@@ -97,22 +97,22 @@ static sfloat A_data[NSTATES*NSTATES] = {
   1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
   0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
   0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.004234f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,-0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.004234f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000014f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,-0.001807f,0.000000f,1.000000f,0.000000f,0.000000f,
-  0.000014f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.001807f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
+  0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
+  0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
+  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
 };
 
 static sfloat B_data[NSTATES*NINPUTS] = {
-  -0.000019f,0.000019f,0.000962f,-0.027012f,-0.027145f,0.001937f,-0.002989f,0.002974f,0.096236f,-5.402457f,-5.428992f,0.387450f,
-  0.000021f,0.000021f,0.000962f,-0.029747f,0.029850f,-0.000709f,0.003287f,0.003275f,0.096236f,-5.949452f,5.969943f,-0.141728f,
-  0.000019f,-0.000019f,0.000962f,0.027043f,0.027230f,-0.002731f,0.002998f,-0.002978f,0.096236f,5.408501f,5.445914f,-0.546295f,
-  -0.000021f,-0.000021f,0.000962f,0.029717f,-0.029934f,0.001503f,-0.003296f,-0.003272f,0.096236f,5.943408f,-5.986864f,0.300572f,
+  -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
+  0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
+  0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
+  -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
 };
 
 static sfloat f_data[NSTATES] = {0};
@@ -164,7 +164,7 @@ tiny_AdmmWorkspace work;
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
 uint32_t mpcTime = 0;
-float u_hover = 0.6f;
+float u_hover = 0.67f;
 
 float setpoint_z = 0.1f;
 float setpoint_x = 0.0f;
@@ -181,7 +181,7 @@ void controllerOutOfTreeInit(void) {
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
   tiny_InitSettings(&stgs);
 
-  stgs.rho_init = 50.0f;  // IMPORTANT (select offline, associated with precomp.)
+  stgs.rho_init = 100.0f;  // IMPORTANT (select offline, associated with precomp.)
 
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
@@ -219,7 +219,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_states = 0;
   stgs.max_iter = 1;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 1;
+  stgs.check_termination = 0;
   stgs.tol_abs_dual = 10e-2;
   stgs.tol_abs_prim = 10e-2;
 
@@ -280,7 +280,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Positon error, [m]
   x0_data[0] = state->position.x;
   x0_data[1] = state->position.y;
-  x0_data[2] = state->position.z;
+  x0_data[2] = state->position.z - 0*xg_data[2];
   // Body velocity error, [m/s]                          
   x0_data[6] = state->velocity.x;
   x0_data[7] = state->velocity.y;
@@ -311,6 +311,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
   mpcTime = usecTimestamp() - startTimestamp;
 
+  // DEBUG_PRINT("U[0] = [%.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]));
+
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
@@ -333,10 +335,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
 
-  control->normalizedForces[0] = 0.0f;
-  control->normalizedForces[1] = 0.0f;
-  control->normalizedForces[2] = 0.0f;
-  control->normalizedForces[3] = 0.0f;
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
