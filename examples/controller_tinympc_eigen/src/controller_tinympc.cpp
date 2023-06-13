@@ -286,11 +286,11 @@ void controllerOutOfTreeInit(void) {
   tiny_UpdateLinearCost(&work);
 
   /* Solver settings */
-  stgs.max_iter = 2;           // limit this if needed
+  stgs.max_iter = 6;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
-  stgs.tol_abs_dual = 5e-2;
-  stgs.tol_abs_prim = 5e-2;
+  stgs.tol_abs_dual = 1e-2;
+  stgs.tol_abs_prim = 1e-2;
 
   // setpoint_z = 0.1f;
   // setpoint_x = 0.0f;
@@ -377,8 +377,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
+
+  // // JUST LQR
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(xg(1)), (double)(xg(2)));
   // Uhrz[0] = -(Kinf) * (x0 - xg);
+
   mpcTime = usecTimestamp() - startTimestamp;
 
   // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
@@ -387,7 +390,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   
   /* Output control */
   if (setpoint->mode.z == modeDisable) {
