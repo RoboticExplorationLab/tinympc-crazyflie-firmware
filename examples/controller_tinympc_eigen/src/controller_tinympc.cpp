@@ -140,7 +140,7 @@ static tiny_AdmmWorkspace work;
 static bool isInit = false;  // fix for tracking problem
 static uint64_t startTimestamp;
 static uint32_t mpcTime = 0;
-static float u_hover = 0.66f;
+static float u_hover = 0.67f;
 
 static float setpoint_z = 0.1f;
 static float setpoint_x = 0.0f;
@@ -286,7 +286,7 @@ void controllerOutOfTreeInit(void) {
   tiny_UpdateLinearCost(&work);
 
   /* Solver settings */
-  stgs.max_iter = 1;           // limit this if needed
+  stgs.max_iter = 2;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
   stgs.tol_abs_dual = 5e-2;
@@ -375,13 +375,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
-  // tiny_UpdateLinearCost(&work);
-  // tiny_SolveAdmm(&work);
+  tiny_UpdateLinearCost(&work);
+  tiny_SolveAdmm(&work);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(xg(1)), (double)(xg(2)));
-  Uhrz[0] = -(Kinf) * (x0 - xg);
-  // mpcTime = usecTimestamp() - startTimestamp;
+  // Uhrz[0] = -(Kinf) * (x0 - xg);
+  mpcTime = usecTimestamp() - startTimestamp;
 
-  DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
+  // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
@@ -389,21 +389,19 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // result =  info.status_val * info.iter;
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   
-
   /* Output control */
-  // if (setpoint->mode.z == modeDisable) {
-  //   control->normalizedForces[0] = 0.0f;
-  //   control->normalizedForces[1] = 0.0f;
-  //   control->normalizedForces[2] = 0.0f;
-  //   control->normalizedForces[3] = 0.0f;
-  //   DEBUG_PRINT("modeDisable\n");
-  // } else {
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
     control->normalizedForces[0] = Uhrz[0](0) + u_hover;  // PWM 0..1
     control->normalizedForces[1] = Uhrz[0](1) + u_hover;
     control->normalizedForces[2] = Uhrz[0](2) + u_hover;
     control->normalizedForces[3] = Uhrz[0](3) + u_hover;
-  // } 
-  DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
+  } 
+  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
 
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;
