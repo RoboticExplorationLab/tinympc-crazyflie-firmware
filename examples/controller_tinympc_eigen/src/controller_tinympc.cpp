@@ -326,38 +326,38 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   /* Get goal state (reference) */
   // xg[0]  = setpoint_x; 
   // xg[2]  = setpoint_z; 
-  xg(0)  = setpoint->position.x;
-  xg(1)  = setpoint->position.y;
-  xg(2)  = setpoint->position.z;
-  xg(6)  = setpoint->velocity.x;
-  xg(7)  = setpoint->velocity.y;
-  xg(8)  = setpoint->velocity.z;
-  xg(9)  = setpoint->attitudeRate.roll;
-  xg(10) = setpoint->attitudeRate.pitch;
-  xg(11) = setpoint->attitudeRate.yaw;
-  desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-                      radians(setpoint->attitude.pitch), 
-                      radians(setpoint->attitude.yaw));
-  attitude = rpy2quat(desired_rpy);
-  phi = quat2rp(qnormalize(attitude));  
-  xg(3) = phi.x;
-  xg(4) = phi.y;
-  xg(5) = phi.z;
+  xg[0]  = setpoint->position.x;
+  xg[1]  = setpoint->position.y;
+  xg[2]  = setpoint->position.z;
+  xg[6]  = setpoint->velocity.x;
+  xg[7]  = setpoint->velocity.y;
+  xg[8]  = setpoint->velocity.z;
+  xg[9]  = radians(setpoint->attitudeRate.roll);
+  xg[10] = radians(setpoint->attitudeRate.pitch);
+  xg[11] = radians(setpoint->attitudeRate.yaw);
+  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                 radians(setpoint->attitude.pitch), 
+                                 radians(setpoint->attitude.yaw));
+  struct quat attitude = rpy2quat(desired_rpy);
+  struct vec phi = quat2rp(qnormalize(attitude));  
+  xg[3] = phi.x;
+  xg[4] = phi.y;
+  xg[5] = phi.z;
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
-  x0(0) = state->position.x;
-  x0(1) = state->position.y;
-  x0(2) = state->position.z;
+  x0[0] = state->position.x;
+  x0[1] = state->position.y;
+  x0[2] = state->position.z;
   // Body velocity error, [m/s]                          
-  x0(6) = state->velocity.x;
-  x0(7) = state->velocity.y;
-  x0(8) = state->velocity.z;
+  x0[6] = state->velocity.x;
+  x0[7] = state->velocity.y;
+  x0[8] = state->velocity.z;
   // Angular rate error, [rad/s]
-  x0(9)  = radians(sensors->gyro.x);   
-  x0(10) = radians(sensors->gyro.y);
-  x0(11) = radians(sensors->gyro.z);
+  x0[9]  = radians(sensors->gyro.x);   
+  x0[10] = radians(sensors->gyro.y);
+  x0[11] = radians(sensors->gyro.z);
   attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
@@ -365,9 +365,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.w);  // current attitude
   phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
   // Attitude error
-  x0(3) = phi.x;
-  x0(4) = phi.y;
-  x0(5) = phi.z;
+  x0[3] = phi.x;
+  x0[4] = phi.y;
+  x0[5] = phi.z;
 
   /* MPC solve */
   

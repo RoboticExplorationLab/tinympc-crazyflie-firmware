@@ -45,7 +45,7 @@
 #include "math3d.h"
 
 // Edit the debug name to get nice debug prints
-#define DEBUG_MODULE "CONTROLLER_LQR"
+#define DEBUG_MODULE "CONTROLLER_LQR2"
 #include "debug.h"
 
 void appMain() {
@@ -149,12 +149,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  / takeoff
-while Z < 0.6:
-    pos = np.array(cf.initialPosition) + np.array([0, 0, Z])
-    cf.cmdPosition(pos)
-    timeHelper.sleep(0.2)
-    Z += 0.05/ current attitude (right pitch)
+    state->attitudeQuaternion.w);  // current attitude (right pitch)
 
   struct quat attitude_gI = qinv(attitude_g);  
   struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
@@ -188,7 +183,7 @@ while Z < 0.6:
     control->normalizedForces[2] = control_input[2] + u_hover;
     control->normalizedForces[3] = control_input[3] + u_hover;
   } 
-  DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), control->normalizedForces[1]);
+
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;
   // control->normalizedForces[2] = 0.0f;
