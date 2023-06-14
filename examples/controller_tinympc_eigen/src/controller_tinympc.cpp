@@ -376,8 +376,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
-  tiny_SolveAdmm(&work);
-  // Uhrz[0] = -(Kinf) * (x0 - xg);
+  // tiny_SolveAdmm(&work);
+  Uhrz[0] = -(Kinf) * (x0 - xg);
   mpcTime = usecTimestamp() - startTimestamp;
 
   DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
