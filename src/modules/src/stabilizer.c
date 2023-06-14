@@ -239,6 +239,9 @@ static void setMotorRatios(const motors_thrust_pwm_t* motorPwm)
  */
 static void stabilizerTask(void* param)
 {
+  uint32_t nowMs = T2M(xTaskGetTickCount());
+  uint32_t nextPrintMs = nowMs;
+
   uint32_t tick;
   uint32_t lastWakeTime;
   vTaskSetApplicationTaskTag(0, (void*)TASK_STABILIZER_ID_NBR);
@@ -261,6 +264,12 @@ static void stabilizerTask(void* param)
   DEBUG_PRINT("Ready to fly.\n");
 
   while(1) {
+    // nowMs = T2M(xTaskGetTickCount());
+    // if (nowMs >= nextPrintMs) {
+    //   DEBUG_PRINT("running stabilizerTask\n");
+    //   nextPrintMs = nowMs + (1000.0f / 10);
+    // }
+
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
 

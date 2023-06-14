@@ -256,6 +256,9 @@ void controllerTinyMPCInit(void)
 
 void controllerTinyMPC(control_t *control, const setpoint_t *setpoint, 
     const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
+
+  DEBUG_PRINT("running controllerTinyMPC\n");
+
   // This function is called from the stabilizer loop. It is important that this call returns
   // as quickly as possible. The dataMutex must only be locked short periods by the task.
   xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -292,25 +295,35 @@ void controllerTinyMPCTaskInit() {
 }
 
 static void tinympcTask(void* parameters) {
-  systemWaitStart();
+  // systemWaitStart();
 
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextPredictionMs = nowMs;
 
-  rateSupervisorInit(&rateSupervisorContext, nowMs, ONE_SECOND, MPC_RATE - 1, MPC_RATE + 1, 1);
+  // rateSupervisorInit(&rateSupervisorContext, nowMs, ONE_SECOND, MPC_RATE - 1, MPC_RATE + 1, 1);
 
   while (true) {
     xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
     nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
 
-    control_data.normalizedForces[0] = u_hover;
-    control_data.normalizedForces[1] = u_hover;
-    control_data.normalizedForces[2] = u_hover;
-    control_data.normalizedForces[3] = u_hover;
+    // control_data.normalizedForces[0] = u_hover;
+    // control_data.normalizedForces[1] = u_hover;
+    // control_data.normalizedForces[2] = u_hover;
+    // control_data.normalizedForces[3] = u_hover;
+    
+    
+    /* Controller rate */
+    if (nowMs >= nextPredictionMs) {
+      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
 
-    // /* Controller rate */
-    // if (nowMs >= nextPredictionMs) {
-    //   nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
+      DEBUG_PRINT("in tinympc controller task loop\n");
+
+      control_data.normalizedForces[0] = 0;
+      control_data.normalizedForces[1] = 0;
+      control_data.normalizedForces[2] = 0;
+      control_data.normalizedForces[3] = 0;
+    }
+
       
     //   bool quadIsFlying = supervisorIsFlying();
 

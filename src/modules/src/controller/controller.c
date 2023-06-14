@@ -29,10 +29,10 @@ static ControllerFcns controllerFunctions[] = {
   {.init = controllerMellingerFirmwareInit, .test = controllerMellingerFirmwareTest, .update = controllerMellingerFirmware, .name = "Mellinger"},
   {.init = controllerINDIInit, .test = controllerINDITest, .update = controllerINDI, .name = "INDI"},
   {.init = controllerBrescianiniInit, .test = controllerBrescianiniTest, .update = controllerBrescianini, .name = "Brescianini"},
-  {.init = controllerTinyMPCInit, .test = controllerTinyMPCTest, .update = controllerTinyMPC, .name = "TinyMPC"},
   #ifdef CONFIG_CONTROLLER_OOT
   {.init = controllerOutOfTreeInit, .test = controllerOutOfTreeTest, .update = controllerOutOfTree, .name = "OutOfTree"},
   #endif
+  {.init = controllerTinyMPCInit, .test = controllerTinyMPCTest, .update = controllerTinyMPC, .name = "TinyMPC"},
 };
 
 
