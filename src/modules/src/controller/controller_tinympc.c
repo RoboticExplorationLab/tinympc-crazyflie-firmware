@@ -69,6 +69,7 @@ static float control_input[NU];
 static float u_hover = 0.66f;  // ~ mass/max_thrust
 
 // Struct for logging position information
+uint32_t mpcTime = 0;
 static bool isInit = false;
 
 // Structs to keep track of data sent to and received by stabilizer loop
@@ -152,63 +153,91 @@ static void tinympcControllerTask(void* parameters) {
       nextPredictionMs = nowMs + (1000.0f / LQR_RATE);
 
       // DEBUG_PRINT("in tinympc controller task loop\n");
-      
+          
       // Get current time
       uint64_t startTimestamp = usecTimestamp();
 
-      //////// LQR
+      // // Rule to take-off and land gradually
+      // // if (RATE_DO_EXECUTE(10, tick)) {    
+      // //   setpoint_z += z_sign * 0.1f;
+      // //   if (setpoint_z > 1.0f) z_sign = -1;
+      // //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
+      // //   setpoint_x += 1.0f;
+      // //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
+      // // }
 
-      // Positon error, [m]
-      x_error[0] = state_task.position.x - 1*setpoint_task.position.x;
-      x_error[1] = state_task.position.y - 1*setpoint_task.position.y;
-      x_error[2] = state_task.position.z - 1*setpoint_task.position.z;
-
-      // Frame velocity error, [m/s]                          
-      x_error[6] = state_task.velocity.x - 1*setpoint_task.velocity.x;
-      x_error[7] = state_task.velocity.y - 1*setpoint_task.velocity.y;
-      x_error[8] = state_task.velocity.z - 1*setpoint_task.velocity.z;
-
-      // Angular rate error, [rad/s]
-      x_error[9]  = radians(sensors_task.gyro.x - 1*setpoint_task.attitudeRate.roll);   
-      x_error[10] = radians(sensors_task.gyro.y - 1*setpoint_task.attitudeRate.pitch);
-      x_error[11] = radians(sensors_task.gyro.z - 1*setpoint_task.attitudeRate.yaw);
-
-      // struct quat attitude_g = qeye();  // goal attitude
-      // struct quat attitude_g = mkquat(setpoint_task.attitudeQuaternion.x, 
-      //                                 setpoint_task.attitudeQuaternion.y, 
-      //                                 setpoint_task.attitudeQuaternion.z, 
-      //                                 setpoint_task.attitudeQuaternion.w);  // do not have quat cmd
-
+      // /* Get goal state_task (reference) */
+      // // xg_data[0]  = setpoint_x; 
+      // // xg_data[2]  = setpoint_z; 
+      xg_data[0]  = setpoint_task.position.x;
+      xg_data[1]  = setpoint_task.position.y;
+      xg_data[2]  = setpoint_task.position.z;
+      xg_data[6]  = setpoint_task.velocity.x;
+      xg_data[7]  = setpoint_task.velocity.y;
+      xg_data[8]  = setpoint_task.velocity.z;
+      xg_data[9]  = radians(setpoint_task.attitudeRate.roll);
+      xg_data[10] = radians(setpoint_task.attitudeRate.pitch);
+      xg_data[11] = radians(setpoint_task.attitudeRate.yaw);
       struct vec desired_rpy = mkvec(radians(setpoint_task.attitude.roll), 
                                     radians(setpoint_task.attitude.pitch), 
                                     radians(setpoint_task.attitude.yaw));
-      struct quat attitude_g = rpy2quat(desired_rpy);
-
-      struct quat attitude = mkquat(
+      struct quat attitude = rpy2quat(desired_rpy);
+      struct vec phi = quat2rp(qnormalize(attitude));  
+      xg_data[3] = phi.x;
+      xg_data[4] = phi.y;
+      xg_data[5] = phi.z;
+      
+      /* Get current state_task (initial state_task for MPC) */
+      // delta_x = x - x_bar; x_bar = 0
+      // Positon error, [m]
+      x0_data[0] = state_task.position.x;
+      x0_data[1] = state_task.position.y;
+      x0_data[2] = state_task.position.z;
+      // Body velocity error, [m/s]                          
+      x0_data[6] = state_task.velocity.x;
+      x0_data[7] = state_task.velocity.y;
+      x0_data[8] = state_task.velocity.z;
+      // Angular rate error, [rad/s]
+      x0_data[9]  = radians(sensors_task.gyro.x);   
+      x0_data[10] = radians(sensors_task.gyro.y);
+      x0_data[11] = radians(sensors_task.gyro.z);
+      attitude = mkquat(
         state_task.attitudeQuaternion.x,
         state_task.attitudeQuaternion.y,
         state_task.attitudeQuaternion.z,
-        state_task.attitudeQuaternion.w);  // current attitude (right pitch)
-
-      struct quat attitude_gI = qinv(attitude_g);
-      struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
-      struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
-      
+        state_task.attitudeQuaternion.w);  // current attitude
+      phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
       // Attitude error
-      x_error[3] = phi.x;
-      x_error[4] = phi.y;
-      x_error[5] = phi.z;
+      x0_data[3] = phi.x;
+      x0_data[4] = phi.y;
+      x0_data[5] = phi.z;
 
-      // Matrix multiplication, compute control_task input
-      for (int i = 0; i < STABILIZER_NR_OF_MOTORS; i++){
-        control_input[i] = 0;
-        for (int j = 0; j < NXt; j++) {
-          control_input[i] += -K[i][j] * x_error[j] * 1.0f;
-        }
-      }
+      /* MPC solve */
+      
+      // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
+      // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
-      // Debug printing
-      // DEBUG_PRINT("U = [%.2f, %.2f, %.2f, %.2f]\n", (double)(control_input[0]), (double)(control_input[1]), (double)(control_input[2]), (double)(control_input[3]));
+      // Solve optimization problem using ADMM
+      tiny_UpdateLinearCost(&work);
+      tiny_SolveAdmm(&work);
+
+      // // JUST LQR
+      // MatAdd(data.x0, data.x0, Xref[0], -1);
+      // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+
+      // mpcTime = usecTimestamp() - startTimestamp;
+
+      // DEBUG_PRINT("U[0] = [%.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]));
+
+      // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
+      // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
+      // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
+      // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
+      // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
+      // result =  info.status_val * info.iter;
+      DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+      // DEBUG_PRINT("%d\n", mpcTime);
+      // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
       /* Output control_task */
       if (setpoint_task.mode.z == modeDisable) {
@@ -217,14 +246,18 @@ static void tinympcControllerTask(void* parameters) {
         control_task.normalizedForces[2] = 0.0f;
         control_task.normalizedForces[3] = 0.0f;
       } else {
-        control_task.normalizedForces[0] = control_input[0] + u_hover;  // PWM 0..1
-        control_task.normalizedForces[1] = control_input[1] + u_hover;
-        control_task.normalizedForces[2] = control_input[2] + u_hover;
-        control_task.normalizedForces[3] = control_input[3] + u_hover;
+        control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+        control_task.normalizedForces[1] = U[0].data[1] + u_hover;
+        control_task.normalizedForces[2] = U[0].data[2] + u_hover;
+        control_task.normalizedForces[3] = U[0].data[3] + u_hover;
       } 
-    }
+      // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control_task.normalizedForces[0]), (double)(control_task.normalizedForces[2]));
+      // control_task.normalizedForces[0] = 0.0f;
+      // control_task.normalizedForces[1] = 0.0f;
+      // control_task.normalizedForces[2] = 0.0f;
+      // control_task.normalizedForces[3] = 0.0f;
 
-    control_task.controlMode = controlModePWM;
+      control_task.controlMode = controlModePWM;
       
       ////////////////////////
       ////// END LQR
