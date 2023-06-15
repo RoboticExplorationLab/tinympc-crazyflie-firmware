@@ -206,7 +206,7 @@
 #define LPS_DECK_STACKSIZE            (3 * configMINIMAL_STACK_SIZE)
 #define OA_DECK_TASK_STACKSIZE        (2 * configMINIMAL_STACK_SIZE)
 #define KALMAN_TASK_STACKSIZE         (3 * configMINIMAL_STACK_SIZE)
-#define TINYMPC_TASK_STACKSIZE        (1 * configMINIMAL_STACK_SIZE) // Modify tinympc stack size here
+#define TINYMPC_TASK_STACKSIZE        (3 * configMINIMAL_STACK_SIZE) // Modify tinympc stack size here
 #define FLAPPERDECK_TASK_STACKSIZE    (2 * configMINIMAL_STACK_SIZE)
 #define ERROR_UKF_TASK_STACKSIZE      (4 * configMINIMAL_STACK_SIZE)
 
