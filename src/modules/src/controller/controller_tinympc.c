@@ -94,131 +94,149 @@ int _write(int file, char* ptr, int len)
 // #include "params_50hz_agg.h"
 #include "tinympc/data/params_50hz.h"
 
-
-/////// BRESCIANINI VARS TO DELETE LATER
-
-
-static struct mat33 CRAZYFLIE_INERTIA =
-    {{{16.6e-6f, 0.83e-6f, 0.72e-6f},
-      {0.83e-6f, 16.6e-6f, 1.8e-6f},
-      {0.72e-6f, 1.8e-6f, 29.3e-6f}}};
+#define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
+#define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
+#define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
+#define LQR_RATE RATE_100_HZ  // control frequency
 
 
-// tau is a time constant, lower -> more aggressive control (weight on position error)
-// zeta is a damping factor, higher -> more damping (weight on velocity error)
-
-static float tau_xy = 0.3;
-static float zeta_xy = 0.85; // this gives good performance down to 0.4, the lower the more aggressive (less damping)
-
-static float tau_z = 0.3;
-static float zeta_z = 0.85;
-
-// time constant of body angle (thrust direction) control
-static float tau_rp = 0.25;
-// what percentage is yaw control speed in terms of roll/pitch control speed \in [0, 1], 0 means yaw not controlled
-static float mixing_factor = 1.0;
-
-// time constant of rotational rate control
-static float tau_rp_rate = 0.015;
-static float tau_yaw_rate = 0.0075;
-
-// minimum and maximum thrusts
-static float coll_min = 1;  // in Gs?
-static float coll_max = 18;
-// if too much thrust is commanded, which axis is reduced to meet maximum thrust?
-// 1 -> even reduction across x, y, z
-// 0 -> z gets what it wants (eg. maintain height at all costs)
-static float thrust_reduction_fairness = 0.25;
-
-// minimum and maximum body rates
-static float omega_rp_max = 30;  // in rad/s
-static float omega_yaw_max = 10;
-static float heuristic_rp = 12;
-static float heuristic_yaw = 5;
-
-
-///////
-
-/* Allocate global variables for MPC */
-
-// Precompute data offline
-static sfloat A_data[NSTATES*NSTATES] = {
-  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.004234f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,-0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.004234f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000014f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,-0.001807f,0.000000f,1.000000f,0.000000f,0.000000f,
-  0.000014f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.001807f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
+static float K[NU][NXt] = {
+  {-0.331565f,0.330591f,0.428867f,-0.717416f,-0.760102f,-0.850880f,-0.182481f,0.179291f,0.241446f,-0.047415f,-0.056629f,-0.248436f},
+  {0.324489f,0.320604f,0.428867f,-0.638375f,0.737373f,0.854866f,0.177808f,0.169928f,0.241446f,-0.033569f,0.054904f,0.247177f},
+  {0.324793f,-0.327876f,0.428867f,0.661422f,0.620130f,-0.864462f,0.171002f,-0.174697f,0.241446f,0.035308f,0.026362f,-0.244064f},
+  {-0.317718f,-0.323319f,0.428867f,0.694369f,-0.597400f,0.860476f,-0.166329f,-0.174522f,0.241446f,0.045676f,-0.024637f,0.245322f},
 };
 
-static sfloat B_data[NSTATES*NINPUTS] = {
-  -0.000019f,0.000019f,0.000962f,-0.027012f,-0.027145f,0.001937f,-0.002989f,0.002974f,0.096236f,-5.402457f,-5.428992f,0.387450f,
-  0.000021f,0.000021f,0.000962f,-0.029747f,0.029850f,-0.000709f,0.003287f,0.003275f,0.096236f,-5.949452f,5.969943f,-0.141728f,
-  0.000019f,-0.000019f,0.000962f,0.027043f,0.027230f,-0.002731f,0.002998f,-0.002978f,0.096236f,5.408501f,5.445914f,-0.546295f,
-  -0.000021f,-0.000021f,0.000962f,0.029717f,-0.029934f,0.001503f,-0.003296f,-0.003272f,0.096236f,5.943408f,-5.986864f,0.300572f,
-};
 
-static sfloat f_data[NSTATES] = {0};
+static float x_error[NXt];  
+static float control_input[NU];
 
-// Create data array, all zero initialization
-static sfloat x0_data[NSTATES] = {0.0f};       // initial state
-static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
-static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
-static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
-static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
-static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
-// static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
-// static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
-static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
-static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
-static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat umin_data[NINPUTS] = {0.0f};
-static sfloat umax_data[NINPUTS] = {0.0f};
-static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
+// /////// BRESCIANINI VARS TO DELETE LATER
 
-// Created matrices
-static Matrix Xref[NSIM];
-static Matrix Uref[NSIM - 1];
-static Matrix X[NHORIZON];
-static Matrix U[NHORIZON - 1];
-static Matrix d[NHORIZON - 1];
-static Matrix p[NHORIZON];
-static Matrix YU[NHORIZON - 1];
-static Matrix ZU[NHORIZON - 1];
-static Matrix ZU_new[NHORIZON - 1];
-static Matrix q[NHORIZON-1];
-static Matrix r[NHORIZON-1];
-static Matrix r_tilde[NHORIZON-1];
-static Matrix A;
-static Matrix B;
-static Matrix f;
 
-// Create TinyMPC struct
-tiny_Model model;
-tiny_AdmmSettings stgs;
-tiny_AdmmData data;
-tiny_AdmmInfo info;
-tiny_AdmmSolution soln;
-tiny_AdmmWorkspace work;
+// static struct mat33 CRAZYFLIE_INERTIA =
+//     {{{16.6e-6f, 0.83e-6f, 0.72e-6f},
+//       {0.83e-6f, 16.6e-6f, 1.8e-6f},
+//       {0.72e-6f, 1.8e-6f, 29.3e-6f}}};
 
-// Helper variables
+
+// // tau is a time constant, lower -> more aggressive control (weight on position error)
+// // zeta is a damping factor, higher -> more damping (weight on velocity error)
+
+// static float tau_xy = 0.3;
+// static float zeta_xy = 0.85; // this gives good performance down to 0.4, the lower the more aggressive (less damping)
+
+// static float tau_z = 0.3;
+// static float zeta_z = 0.85;
+
+// // time constant of body angle (thrust direction) control
+// static float tau_rp = 0.25;
+// // what percentage is yaw control speed in terms of roll/pitch control speed \in [0, 1], 0 means yaw not controlled
+// static float mixing_factor = 1.0;
+
+// // time constant of rotational rate control
+// static float tau_rp_rate = 0.015;
+// static float tau_yaw_rate = 0.0075;
+
+// // minimum and maximum thrusts
+// static float coll_min = 1;  // in Gs?
+// static float coll_max = 18;
+// // if too much thrust is commanded, which axis is reduced to meet maximum thrust?
+// // 1 -> even reduction across x, y, z
+// // 0 -> z gets what it wants (eg. maintain height at all costs)
+// static float thrust_reduction_fairness = 0.25;
+
+// // minimum and maximum body rates
+// static float omega_rp_max = 30;  // in rad/s
+// static float omega_yaw_max = 10;
+// static float heuristic_rp = 12;
+// static float heuristic_yaw = 5;
+
+/////// END BRESCIANINI VARS
+
+
+
+
+// /* Allocate global variables for MPC */
+
+// // Precompute data offline
+// static sfloat A_data[NSTATES*NSTATES] = {
+//   1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,-0.004234f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,-0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.004234f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,-0.000014f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,-0.001807f,0.000000f,1.000000f,0.000000f,0.000000f,
+//   0.000014f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.001807f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,
+//   0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
+// };
+
+// static sfloat B_data[NSTATES*NINPUTS] = {
+//   -0.000019f,0.000019f,0.000962f,-0.027012f,-0.027145f,0.001937f,-0.002989f,0.002974f,0.096236f,-5.402457f,-5.428992f,0.387450f,
+//   0.000021f,0.000021f,0.000962f,-0.029747f,0.029850f,-0.000709f,0.003287f,0.003275f,0.096236f,-5.949452f,5.969943f,-0.141728f,
+//   0.000019f,-0.000019f,0.000962f,0.027043f,0.027230f,-0.002731f,0.002998f,-0.002978f,0.096236f,5.408501f,5.445914f,-0.546295f,
+//   -0.000021f,-0.000021f,0.000962f,0.029717f,-0.029934f,0.001503f,-0.003296f,-0.003272f,0.096236f,5.943408f,-5.986864f,0.300572f,
+// };
+
+// static sfloat f_data[NSTATES] = {0};
+
+// // Create data array, all zero initialization
+// static sfloat x0_data[NSTATES] = {0.0f};       // initial state
+// static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
+// static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
+// static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
+// static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
+// static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+// static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
+// // static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
+// // static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
+// static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
+// static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+// static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+// static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
+// static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+// static sfloat umin_data[NINPUTS] = {0.0f};
+// static sfloat umax_data[NINPUTS] = {0.0f};
+// static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
+
+// // Created matrices
+// static Matrix Xref[NSIM];
+// static Matrix Uref[NSIM - 1];
+// static Matrix X[NHORIZON];
+// static Matrix U[NHORIZON - 1];
+// static Matrix d[NHORIZON - 1];
+// static Matrix p[NHORIZON];
+// static Matrix YU[NHORIZON - 1];
+// static Matrix ZU[NHORIZON - 1];
+// static Matrix ZU_new[NHORIZON - 1];
+// static Matrix q[NHORIZON-1];
+// static Matrix r[NHORIZON-1];
+// static Matrix r_tilde[NHORIZON-1];
+// static Matrix A;
+// static Matrix B;
+// static Matrix f;
+
+// // Create TinyMPC struct
+// tiny_Model model;
+// tiny_AdmmSettings stgs;
+// tiny_AdmmData data;
+// tiny_AdmmInfo info;
+// tiny_AdmmSolution soln;
+// tiny_AdmmWorkspace work;
+
+// // Helper variables
 static bool isInit = false;  // fix for tracking problem
 uint32_t mpcTime = 0;
 float u_hover = 0.6f;
 
-float setpoint_z = 0.1f;
-float setpoint_x = 0.0f;
-int z_sign = 1;
-int8_t result = 0;
+// float setpoint_z = 0.1f;
+// float setpoint_x = 0.0f;
+// int z_sign = 1;
+// int8_t result = 0;
 
 // Structs to keep track of data sent to and received by stabilizer loop
 
@@ -315,103 +333,183 @@ static void tinympcControllerTask(void* parameters) {
       // control_task.normalizedForces[2] = u_hover;
       // control_task.normalizedForces[3] = u_hover;
 
-    // DEBUG_PRINT("control: %f %f %f %f\n", (double)control.normalizedForces[0], (double)control.normalizedForces[1], (double)control.normalizedForces[2], (double)control.normalizedForces[3]);
+    // DEBUG_PRINT("control_task: %f %f %f %f\n", (double)control_task.normalizedForces[0], (double)control_task.normalizedForces[1], (double)control_task.normalizedForces[2], (double)control_task.normalizedForces[3]);
       
       // Get current time
       uint64_t startTimestamp = usecTimestamp();
 
-      // Rule to take-off and land gradually
-      // if (RATE_DO_EXECUTE(10, tick)) {    
-      //   setpoint_z += z_sign * 0.1f;
-      //   if (setpoint_z > 1.0f) z_sign = -1;
-      //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
-      //   setpoint_x += 1.0f;
-      //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
-      // }
 
-      /* Get goal state (reference) */
-      // xg_data[0]  = setpoint_x; 
-      // xg_data[2]  = setpoint_z; 
-      xg_data[0]  = setpoint_data.position.x;
-      xg_data[1]  = setpoint_data.position.y;
-      xg_data[2]  = setpoint_data.position.z;
-      xg_data[6]  = setpoint_data.velocity.x;
-      xg_data[7]  = setpoint_data.velocity.y;
-      xg_data[8]  = setpoint_data.velocity.z;
-      xg_data[9]  = setpoint_data.attitudeRate.roll;
-      xg_data[10] = setpoint_data.attitudeRate.pitch;
-      xg_data[11] = setpoint_data.attitudeRate.yaw;
-      struct vec desired_rpy = mkvec(radians(setpoint_data.attitude.roll), 
-                                    radians(setpoint_data.attitude.pitch), 
-                                    radians(setpoint_data.attitude.yaw));
-      struct quat attitude = rpy2quat(desired_rpy);
-      struct vec phi = quat2rp(qnormalize(attitude));  
-      xg_data[3] = phi.x;
-      xg_data[4] = phi.y;
-      xg_data[5] = phi.z;
-      
-      /* Get current state (initial state for MPC) */
-      // delta_x = x - x_bar; x_bar = 0
+      //////// LQR
+
       // Positon error, [m]
-      x0_data[0] = state_data.position.x;
-      x0_data[1] = state_data.position.y;
-      x0_data[2] = state_data.position.z;
-      // Body velocity error, [m/s]                          
-      x0_data[6] = state_data.velocity.x;
-      x0_data[7] = state_data.velocity.y;
-      x0_data[8] = state_data.velocity.z;
+      x_error[0] = state_task.position.x - 1*setpoint_task.position.x;
+      x_error[1] = state_task.position.y - 1*setpoint_task.position.y;
+      x_error[2] = state_task.position.z - 1*setpoint_task.position.z;
+
+      // Frame velocity error, [m/s]                          
+      x_error[6] = state_task.velocity.x - 1*setpoint_task.velocity.x;
+      x_error[7] = state_task.velocity.y - 1*setpoint_task.velocity.y;
+      x_error[8] = state_task.velocity.z - 1*setpoint_task.velocity.z;
+
       // Angular rate error, [rad/s]
-      x0_data[9]  = radians(sensors_data.gyro.x);   
-      x0_data[10] = radians(sensors_data.gyro.y);
-      x0_data[11] = radians(sensors_data.gyro.z);
-      attitude = mkquat(
-        state_data.attitudeQuaternion.x,
-        state_data.attitudeQuaternion.y,
-        state_data.attitudeQuaternion.z,
-        state_data.attitudeQuaternion.w);  // current attitude
-      phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
-      // Attitude error
-      x0_data[3] = phi.x;
-      x0_data[4] = phi.y;
-      x0_data[5] = phi.z;
+      x_error[9]  = radians(sensors_task.gyro.x - 1*setpoint_task.attitudeRate.roll);   
+      x_error[10] = radians(sensors_task.gyro.y - 1*setpoint_task.attitudeRate.pitch);
+      x_error[11] = radians(sensors_task.gyro.z - 1*setpoint_task.attitudeRate.yaw);
 
-      /* MPC solve */
+      // struct quat attitude_g = qeye();  // goal attitude
+      // struct quat attitude_g = mkquat(setpoint_task.attitudeQuaternion.x, 
+      //                                 setpoint_task.attitudeQuaternion.y, 
+      //                                 setpoint_task.attitudeQuaternion.z, 
+      //                                 setpoint_task.attitudeQuaternion.w);  // do not have quat cmd
+
+      struct vec desired_rpy = mkvec(radians(setpoint_task.attitude.roll), 
+                                    radians(setpoint_task.attitude.pitch), 
+                                    radians(setpoint_task.attitude.yaw));
+      struct quat attitude_g = rpy2quat(desired_rpy);
+
+      struct quat attitude = mkquat(
+        state_task.attitudeQuaternion.x,
+        state_task.attitudeQuaternion.y,
+        state_task.attitudeQuaternion.z,
+        state_task.attitudeQuaternion.w);  // current attitude (right pitch)
+
+      struct quat attitude_gI = qinv(attitude_g);
+      struct quat q_error = qnormalize(qqmul(attitude_gI, attitude));
+      struct vec phi = quat2rp(q_error);  // quaternion to Rodriquez parameters
       
-      // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
-      // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
+      // Attitude error
+      x_error[3] = phi.x;
+      x_error[4] = phi.y;
+      x_error[5] = phi.z;
 
-      // Solve optimization problem using ADMM
-      tiny_UpdateLinearCost(&work);
-      tiny_SolveAdmm(&work);
-      // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
-      mpcTime = usecTimestamp() - startTimestamp;
+      // Matrix multiplication, compute control_task input
+      for (int i = 0; i < STABILIZER_NR_OF_MOTORS; i++){
+        control_input[i] = 0;
+        for (int j = 0; j < NXt; j++) {
+          control_input[i] += -K[i][j] * x_error[j] * 1.0f;
+        }
+      }
 
-      // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
-      // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
-      // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
-      // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
-      // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-      // result =  info.status_val * info.iter;
-      // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
-      // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
+      // Debug printing
+      // DEBUG_PRINT("U = [%.2f, %.2f, %.2f, %.2f]\n", (double)(control_input[0]), (double)(control_input[1]), (double)(control_input[2]), (double)(control_input[3]));
 
-      /* Output control */
-      if (setpoint_data.mode.z == modeDisable) {
+      /* Output control_task */
+      if (setpoint_task.mode.z == modeDisable) {
         control_task.normalizedForces[0] = 0.0f;
         control_task.normalizedForces[1] = 0.0f;
         control_task.normalizedForces[2] = 0.0f;
         control_task.normalizedForces[3] = 0.0f;
       } else {
-        control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
-        control_task.normalizedForces[1] = U[0].data[1] + u_hover;
-        control_task.normalizedForces[2] = U[0].data[2] + u_hover;
-        control_task.normalizedForces[3] = U[0].data[3] + u_hover;
+        control_task.normalizedForces[0] = control_input[0] + u_hover;  // PWM 0..1
+        control_task.normalizedForces[1] = control_input[1] + u_hover;
+        control_task.normalizedForces[2] = control_input[2] + u_hover;
+        control_task.normalizedForces[3] = control_input[3] + u_hover;
       } 
-
-      DEBUG_PRINT("control: %f %f %f %f\n", (double)control_task.normalizedForces[0], (double)control_task.normalizedForces[1], (double)control_task.normalizedForces[2], (double)control_task.normalizedForces[3]);
     }
+
+      // control_task.normalizedForces[0] = 0.0f;
+      // control_task.normalizedForces[1] = 0.0f;
+      // control_task.normalizedForces[2] = 0.0f;
+      // control_task.normalizedForces[3] = 0.0f;
+
+      control_task.controlMode = controlModePWM;
+      
+      ////////////////////////
+      ////// END LQR
+      //////////////////////////////
+
+    //   // Rule to take-off and land gradually
+    //   // if (RATE_DO_EXECUTE(10, tick)) {    
+    //   //   setpoint_z += z_sign * 0.1f;
+    //   //   if (setpoint_z > 1.0f) z_sign = -1;
+    //   //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
+    //   //   setpoint_x += 1.0f;
+    //   //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
+    //   // }
+
+    //   /* Get goal state (reference) */
+    //   // xg_data[0]  = setpoint_x; 
+    //   // xg_data[2]  = setpoint_z; 
+    //   xg_data[0]  = setpoint_data.position.x;
+    //   xg_data[1]  = setpoint_data.position.y;
+    //   xg_data[2]  = setpoint_data.position.z;
+    //   xg_data[6]  = setpoint_data.velocity.x;
+    //   xg_data[7]  = setpoint_data.velocity.y;
+    //   xg_data[8]  = setpoint_data.velocity.z;
+    //   xg_data[9]  = setpoint_data.attitudeRate.roll;
+    //   xg_data[10] = setpoint_data.attitudeRate.pitch;
+    //   xg_data[11] = setpoint_data.attitudeRate.yaw;
+    //   struct vec desired_rpy = mkvec(radians(setpoint_data.attitude.roll), 
+    //                                 radians(setpoint_data.attitude.pitch), 
+    //                                 radians(setpoint_data.attitude.yaw));
+    //   struct quat attitude = rpy2quat(desired_rpy);
+    //   struct vec phi = quat2rp(qnormalize(attitude));  
+    //   xg_data[3] = phi.x;
+    //   xg_data[4] = phi.y;
+    //   xg_data[5] = phi.z;
+      
+    //   /* Get current state (initial state for MPC) */
+    //   // delta_x = x - x_bar; x_bar = 0
+    //   // Positon error, [m]
+    //   x0_data[0] = state_data.position.x;
+    //   x0_data[1] = state_data.position.y;
+    //   x0_data[2] = state_data.position.z;
+    //   // Body velocity error, [m/s]                          
+    //   x0_data[6] = state_data.velocity.x;
+    //   x0_data[7] = state_data.velocity.y;
+    //   x0_data[8] = state_data.velocity.z;
+    //   // Angular rate error, [rad/s]
+    //   x0_data[9]  = radians(sensors_data.gyro.x);   
+    //   x0_data[10] = radians(sensors_data.gyro.y);
+    //   x0_data[11] = radians(sensors_data.gyro.z);
+    //   attitude = mkquat(
+    //     state_data.attitudeQuaternion.x,
+    //     state_data.attitudeQuaternion.y,
+    //     state_data.attitudeQuaternion.z,
+    //     state_data.attitudeQuaternion.w);  // current attitude
+    //   phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+    //   // Attitude error
+    //   x0_data[3] = phi.x;
+    //   x0_data[4] = phi.y;
+    //   x0_data[5] = phi.z;
+
+    //   /* MPC solve */
+      
+    //   // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
+    //   // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
+
+    //   // Solve optimization problem using ADMM
+    //   tiny_UpdateLinearCost(&work);
+    //   tiny_SolveAdmm(&work);
+    //   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+    //   mpcTime = usecTimestamp() - startTimestamp;
+
+    //   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
+    //   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
+    //   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
+    //   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
+    //   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
+    //   // result =  info.status_val * info.iter;
+    //   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+    //   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
+
+    //   /* Output control */
+    //   if (setpoint_data.mode.z == modeDisable) {
+    //     control_task.normalizedForces[0] = 0.0f;
+    //     control_task.normalizedForces[1] = 0.0f;
+    //     control_task.normalizedForces[2] = 0.0f;
+    //     control_task.normalizedForces[3] = 0.0f;
+    //   } else {
+    //     control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+    //     control_task.normalizedForces[1] = U[0].data[1] + u_hover;
+    //     control_task.normalizedForces[2] = U[0].data[2] + u_hover;
+    //     control_task.normalizedForces[3] = U[0].data[3] + u_hover;
+    //   } 
+
+    //   DEBUG_PRINT("control: %f %f %f %f\n", (double)control_task.normalizedForces[0], (double)control_task.normalizedForces[1], (double)control_task.normalizedForces[2], (double)control_task.normalizedForces[3]);
+    // }
     
-    control_task.controlMode = controlModePWM;
+    // control_task.controlMode = controlModePWM;
 
     // Copy the controls calculated by the task loop to the global control_data
     xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -760,38 +858,39 @@ bool controllerTinyMPCTest() {
  * MPC controller
  */
 
-LOG_GROUP_START(ctrlTinyMPC)
+// LOG_GROUP_START(ctrlTinyMPC)
 
-LOG_ADD(LOG_FLOAT, x, &x0_data[0])
-LOG_ADD(LOG_FLOAT, y, &x0_data[1])
-LOG_ADD(LOG_FLOAT, z, &x0_data[2])
 
-LOG_ADD(LOG_FLOAT, roll,  &x0_data[3])
-LOG_ADD(LOG_FLOAT, pitch, &x0_data[4])
-LOG_ADD(LOG_FLOAT, yaw,   &x0_data[5])
+// // LOG_ADD(LOG_FLOAT, x, &x0_data[0])
+// // LOG_ADD(LOG_FLOAT, y, &x0_data[1])
+// // LOG_ADD(LOG_FLOAT, z, &x0_data[2])
 
-LOG_ADD(LOG_FLOAT, vx, &x0_data[6])
-LOG_ADD(LOG_FLOAT, vy, &x0_data[7])
-LOG_ADD(LOG_FLOAT, vz, &x0_data[8])
+// // LOG_ADD(LOG_FLOAT, roll,  &x0_data[3])
+// // LOG_ADD(LOG_FLOAT, pitch, &x0_data[4])
+// // LOG_ADD(LOG_FLOAT, yaw,   &x0_data[5])
 
-LOG_ADD(LOG_FLOAT, wroll,  &x0_data[9])
-LOG_ADD(LOG_FLOAT, wpitch, &x0_data[10])
-LOG_ADD(LOG_FLOAT, wyaw,   &x0_data[11])
+// // LOG_ADD(LOG_FLOAT, vx, &x0_data[6])
+// // LOG_ADD(LOG_FLOAT, vy, &x0_data[7])
+// // LOG_ADD(LOG_FLOAT, vz, &x0_data[8])
 
-LOG_ADD(LOG_INT8, result, &result)
-LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
+// // LOG_ADD(LOG_FLOAT, wroll,  &x0_data[9])
+// // LOG_ADD(LOG_FLOAT, wpitch, &x0_data[10])
+// // LOG_ADD(LOG_FLOAT, wyaw,   &x0_data[11])
 
-LOG_ADD(LOG_FLOAT, u0, &(control_data.normalizedForces[0]))
-LOG_ADD(LOG_FLOAT, u1, &(control_data.normalizedForces[1]))
-LOG_ADD(LOG_FLOAT, u2, &(control_data.normalizedForces[2]))
-LOG_ADD(LOG_FLOAT, u3, &(control_data.normalizedForces[3]))
+// // LOG_ADD(LOG_INT8, result, &result)
+// LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
-LOG_ADD(LOG_FLOAT, yu0, &(YU_data[0]))
-LOG_ADD(LOG_FLOAT, yu1, &(YU_data[1]))
-LOG_ADD(LOG_FLOAT, yu2, &(YU_data[2]))
-LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
+// // LOG_ADD(LOG_FLOAT, u0, &(control_data.normalizedForces[0]))
+// // LOG_ADD(LOG_FLOAT, u1, &(control_data.normalizedForces[1]))
+// // LOG_ADD(LOG_FLOAT, u2, &(control_data.normalizedForces[2]))
+// // LOG_ADD(LOG_FLOAT, u3, &(control_data.normalizedForces[3]))
 
-LOG_GROUP_STOP(ctrlTinyMPC)
+// // LOG_ADD(LOG_FLOAT, yu0, &(YU_data[0]))
+// // LOG_ADD(LOG_FLOAT, yu1, &(YU_data[1]))
+// // LOG_ADD(LOG_FLOAT, yu2, &(YU_data[2]))
+// // LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
+
+// LOG_GROUP_STOP(ctrlTinyMPC)
 
 #ifdef __cplusplus
 }
