@@ -69,10 +69,6 @@ static StaticSemaphore_t dataMutexBuffer;
 #define ONE_SECOND 1000
 #define UPDATE_RATE RATE_100_HZ // this is slower than the IMU update rate of 500Hz
 
-/////
-
-
-
 static struct mat33 CRAZYFLIE_INERTIA =
     {{{16.6e-6f, 0.83e-6f, 0.72e-6f},
       {0.83e-6f, 16.6e-6f, 1.8e-6f},
@@ -119,16 +115,16 @@ static bool isInit = false;
 // Structs to keep track of data sent to and received by stabilizer loop
 
 // Updates at 1khz
-control_t control_data;
-setpoint_t setpoint_data;
-sensorData_t sensors_data;
-state_t state_data;
+static control_t control_data;
+static setpoint_t setpoint_data;
+static sensorData_t sensors_data;
+static state_t state_data;
 
 // Updates at update_rate
-setpoint_t setpoint_task;
-sensorData_t sensors_task;
-state_t state_task;
-control_t control_task;
+static setpoint_t setpoint_task;
+static sensorData_t sensors_task;
+static state_t state_task;
+static control_t control_task;
 
 
 ///// Modified from estimator_kalman.c
@@ -148,7 +144,7 @@ void controllerBrescianiniInit(void) {
   // Created in the 'empty' state, meaning the semaphore must first be given, that is it will block in the task
   // until released by the stabilizer loop
 
-  DEBUG_PRINT("init brescianini\n");
+  // DEBUG_PRINT("init brescianini\n");
 
   startTimestamp = usecTimestamp();
   // DEBUG_PRINT("init time: %d\n", startTimestamp);
@@ -169,15 +165,13 @@ void controllerBrescianiniInit(void) {
 
   // DEBUG_PRINT("staticMemTaskCreate\n");
 
-  
-
   isInit = true;
 }
 
 
 // #define UPDATE_RATE RATE_100_HZ
 
-
+// This runs at every stabilizer step at 1000 Hz
 void controllerBrescianini(control_t *control,
                                  const setpoint_t *setpoint,
                                  const sensorData_t *sensors,
@@ -209,7 +203,7 @@ void brescianiniControllerTask(void *args) {
   systemWaitStart();
 
   // DEBUG_PRINT("taskStarted\n");
-  DEBUG_PRINT("task started time: %lld\n", usecTimestamp() - startTimestamp);
+  // DEBUG_PRINT("task started time: %lld\n", usecTimestamp() - startTimestamp);
 
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextPredictionMs = nowMs;
@@ -514,6 +508,7 @@ void brescianiniControllerTask(void *args) {
       control_thrust = collCmd;  // m/s^2
     }
 
+    //// This is outside of UPDATE_RATE
     if (setpoint_task.mode.z == modeDisable) {
       // DEBUG_PRINT("setpoint_task.mode.z == modeDisable\n");
       control_task.thrustSi = 0.0f;

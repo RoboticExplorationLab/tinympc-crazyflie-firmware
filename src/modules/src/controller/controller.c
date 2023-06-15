@@ -55,6 +55,8 @@ void controllerInit(ControllerType controller) {
     #define CONTROLLER ControllerTypeMellinger
   #elif defined(CONFIG_CONTROLLER_BRESCIANINI)
     #define CONTROLLER ControllerTypeBrescianini
+  #elif defined(CONFIG_CONTROLLER_TINYMPC)
+    #define CONTROLLER ControllerTypeTinyMPC
   #else
     #define CONTROLLER ControllerTypeAutoSelect
   #endif
