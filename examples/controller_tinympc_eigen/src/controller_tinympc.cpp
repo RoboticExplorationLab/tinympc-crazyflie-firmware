@@ -375,12 +375,12 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
-  tiny_UpdateLinearCost(&work);
-  tiny_SolveAdmm(&work);
+  // tiny_UpdateLinearCost(&work);
+  // tiny_SolveAdmm(&work);
 
   // // JUST LQR
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(xg(1)), (double)(xg(2)));
-  // Uhrz[0] = -(Kinf) * (x0 - xg);
+  Uhrz[0] = -(Kinf) * (x0 - xg);
 
   mpcTime = usecTimestamp() - startTimestamp;
 
@@ -390,26 +390,26 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   
   /* Output control */
-  if (setpoint->mode.z == modeDisable) {
-    control->normalizedForces[0] = 0.0f;
-    control->normalizedForces[1] = 0.0f;
-    control->normalizedForces[2] = 0.0f;
-    control->normalizedForces[3] = 0.0f;
-  } else {
+  // if (setpoint->mode.z == modeDisable) {
+  //   control->normalizedForces[0] = 0.0f;
+  //   control->normalizedForces[1] = 0.0f;
+  //   control->normalizedForces[2] = 0.0f;
+  //   control->normalizedForces[3] = 0.0f;
+  // } else {
     control->normalizedForces[0] = Uhrz[0](0) + u_hover;  // PWM 0..1
     control->normalizedForces[1] = Uhrz[0](1) + u_hover;
     control->normalizedForces[2] = Uhrz[0](2) + u_hover;
     control->normalizedForces[3] = Uhrz[0](3) + u_hover;
-  } 
-  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
+  // } 
+  DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
