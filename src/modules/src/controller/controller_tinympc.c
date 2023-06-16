@@ -43,7 +43,10 @@
 #include "math3d.h"
 #include "physicalConstants.h"
 
-#define DEBUG_MODULE "CONTROLLER_TINYMPC"
+#include "slap/slap.h"
+#include "tinympc/tinympc.h"
+
+#define DEBUG_MODULE "TINYMPC"
 #include "debug.h"
 #include "cfassert.h"
 
@@ -52,25 +55,87 @@ static SemaphoreHandle_t runTaskSemaphore;
 static SemaphoreHandle_t dataMutex;
 static StaticSemaphore_t dataMutexBuffer;
 
-#define NX  13  // no. state variable s       [position (3), attitude (4), body velocity (3), angular rate (3)]
-#define NXt 12  // no. state error variables  [position (3), attitude (3), body velocity (3), angular rate (3)]
-#define NU  4   // no. control input          [pwm1, pwm2, pwm3, pwm4] from [0..1]
-#define LQR_RATE RATE_500_HZ  // control frequency
+// #defines and variables for MPC
 
-static float K[NU][NXt] = {
-  {-0.209415f,0.190469f,0.471501f,-0.643639f,-0.716745f,-0.335579f,-0.130498f,0.118040f,0.224146f,-0.046397f,-0.052328f,-0.182753f},
-  {0.207305f,0.160584f,0.471501f,-0.527361f,0.705213f,0.368519f,0.128825f,0.098303f,0.224146f,-0.036927f,0.051228f,0.199755f},
-  {0.138321f,-0.163029f,0.471501f,0.539924f,0.449777f,-0.451224f,0.084350f,-0.100176f,0.224146f,0.038094f,0.031069f,-0.242445f},
-  {-0.136211f,-0.188024f,0.471501f,0.631076f,-0.438245f,0.418285f,-0.082677f,-0.116168f,0.224146f,0.045230f,-0.029969f,0.225443f},
+
+// Macro variables
+#define DT 0.02f       // dt
+#define NSTATES 12    // no. of states (error state)
+#define NINPUTS 4     // no. of controls
+#define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NSIM NHORIZON      // length of reference trajectory
+#define MPC_RATE RATE_50_HZ  // control frequency
+
+
+// Precompute data offline
+static sfloat A_data[NSTATES*NSTATES] = {
+  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
+  0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
+  0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
+  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
 };
 
-static float x_error[NXt];  
-static float control_input[NU];
-static float u_hover = 0.66f;  // ~ mass/max_thrust
+static sfloat B_data[NSTATES*NINPUTS] = {
+  -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
+  0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
+  0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
+  -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
+};
 
-// Struct for logging position information
-uint32_t mpcTime = 0;
-static bool isInit = false;
+static sfloat f_data[NSTATES] = {0};
+
+// Create data array, all zero initialization
+static sfloat x0_data[NSTATES] = {0.0f};       // initial state
+static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
+static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
+static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
+static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
+static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
+// static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
+// static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
+static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
+static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
+static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static sfloat umin_data[NINPUTS] = {0.0f};
+static sfloat umax_data[NINPUTS] = {0.0f};
+static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
+
+// Created matrices
+static Matrix Xref[NSIM];
+static Matrix Uref[NSIM - 1];
+static Matrix X[NHORIZON];
+static Matrix U[NHORIZON - 1];
+static Matrix d[NHORIZON - 1];
+static Matrix p[NHORIZON];
+static Matrix YU[NHORIZON - 1];
+static Matrix ZU[NHORIZON - 1];
+static Matrix ZU_new[NHORIZON - 1];
+static Matrix q[NHORIZON-1];
+static Matrix r[NHORIZON-1];
+static Matrix r_tilde[NHORIZON-1];
+static Matrix A;
+static Matrix B;
+static Matrix f;
+
+// Create TinyMPC struct
+tiny_Model model;
+tiny_AdmmSettings stgs;
+tiny_AdmmData data;
+tiny_AdmmInfo info;
+tiny_AdmmSolution soln;
+tiny_AdmmWorkspace work;
+
 
 // Structs to keep track of data sent to and received by stabilizer loop
 
@@ -86,14 +151,22 @@ sensorData_t sensors_task;
 state_t state_task;
 control_t control_task;
 
+
+// Misc variables
+
+static float u_hover = 0.66f;  // ~ mass/max_thrust
+
+// Struct for logging position information
+// uint32_t mpcTime = 0;
+static bool isInit = false;
+
+
 static void tinympcControllerTask(void* parameters);
 
 STATIC_MEM_TASK_ALLOC(tinympcTask, TINYMPC_TASK_STACKSIZE);
 
 void controllerTinyMPCInit(void)
 {
-  // DEBUG_PRINT("init tinympc controller\n");
-
   if (isInit) {
     return;
   }
@@ -118,7 +191,6 @@ void controllerTinyMPC(control_t *control,
   // This function is called from the stabilizer loop. It is important that this call returns
   // as quickly as possible. The dataMutex must only be locked short periods by the task.
   xSemaphoreTake(dataMutex, portMAX_DELAY);
-
   memcpy(&setpoint_data, setpoint, sizeof(setpoint_t));
   memcpy(&sensors_data, sensors, sizeof(sensorData_t));
   memcpy(&state_data, state, sizeof(state_t));
@@ -137,9 +209,6 @@ static void tinympcControllerTask(void* parameters) {
   uint32_t nextPredictionMs = nowMs;
 
   while (true) {
-    xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
-    nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
-
     // Update task data with most recent stabilizer loop data
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
@@ -148,27 +217,17 @@ static void tinympcControllerTask(void* parameters) {
     memcpy(&control_task, &control_data, sizeof(control_t));
     xSemaphoreGive(dataMutex);
     
+    xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
+    nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
+    
+    // // Get current time
+    // uint64_t startTimestamp = usecTimestamp();
+
     /* Controller rate */
     if (nowMs >= nextPredictionMs) {
       nextPredictionMs = nowMs + (1000.0f / LQR_RATE);
 
-      // DEBUG_PRINT("in tinympc controller task loop\n");
-          
-      // Get current time
-      uint64_t startTimestamp = usecTimestamp();
-
-      // // Rule to take-off and land gradually
-      // // if (RATE_DO_EXECUTE(10, tick)) {    
-      // //   setpoint_z += z_sign * 0.1f;
-      // //   if (setpoint_z > 1.0f) z_sign = -1;
-      // //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
-      // //   setpoint_x += 1.0f;
-      // //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
-      // // }
-
       // /* Get goal state_task (reference) */
-      // // xg_data[0]  = setpoint_x; 
-      // // xg_data[2]  = setpoint_z; 
       xg_data[0]  = setpoint_task.position.x;
       xg_data[1]  = setpoint_task.position.y;
       xg_data[2]  = setpoint_task.position.z;
@@ -213,17 +272,19 @@ static void tinympcControllerTask(void* parameters) {
       x0_data[5] = phi.z;
 
       /* MPC solve */
-      
       // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
       // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
-      // Solve optimization problem using ADMM
-      tiny_UpdateLinearCost(&work);
-      tiny_SolveAdmm(&work);
+      //// Solve optimization problem using ADMM
+      // tiny_UpdateLinearCost(&work);
+      // tiny_SolveAdmm(&work);
+      /* MPC solve end */
 
-      // // JUST LQR
-      // MatAdd(data.x0, data.x0, Xref[0], -1);
-      // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+
+      /* LQR solve */
+      MatAdd(data.x0, data.x0, Xref[0], -1);
+      MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+      /* LQR solve end */
 
       // mpcTime = usecTimestamp() - startTimestamp;
 
@@ -235,7 +296,7 @@ static void tinympcControllerTask(void* parameters) {
       // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
       // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
       // result =  info.status_val * info.iter;
-      DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+      // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
       // DEBUG_PRINT("%d\n", mpcTime);
       // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
@@ -250,6 +311,10 @@ static void tinympcControllerTask(void* parameters) {
         control_task.normalizedForces[1] = U[0].data[1] + u_hover;
         control_task.normalizedForces[2] = U[0].data[2] + u_hover;
         control_task.normalizedForces[3] = U[0].data[3] + u_hover;
+        // control_task.normalizedForces[0] = U[0].data[0];  // PWM 0..1
+        // control_task.normalizedForces[1] = U[0].data[1];
+        // control_task.normalizedForces[2] = U[0].data[2];
+        // control_task.normalizedForces[3] = U[0].data[3];
       } 
       // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control_task.normalizedForces[0]), (double)(control_task.normalizedForces[2]));
       // control_task.normalizedForces[0] = 0.0f;
@@ -259,14 +324,11 @@ static void tinympcControllerTask(void* parameters) {
 
       control_task.controlMode = controlModePWM;
       
-      ////////////////////////
-      ////// END LQR
-      //////////////////////////////
-
-    // Copy the controls calculated by the task loop to the global control_data
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    memcpy(&control_data, &control_task, sizeof(control_t));
-    xSemaphoreGive(dataMutex);
+      // Copy the controls calculated by the task loop to the global control_data
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      memcpy(&control_data, &control_task, sizeof(control_t));
+      xSemaphoreGive(dataMutex);
+    }
   }
 }
 

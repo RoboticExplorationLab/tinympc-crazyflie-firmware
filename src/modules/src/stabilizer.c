@@ -304,9 +304,9 @@ static void stabilizerTask(void* param)
 
       controller(&control, &setpoint, &sensorData, &state, tick);
 
-      // if (controllerType == ControllerTypeTinyMPC) {
-      //   DEBUG_PRINT("control: %f %f %f %f\n", (double)control.normalizedForces[0], (double)control.normalizedForces[1], (double)control.normalizedForces[2], (double)control.normalizedForces[3]);
-      // }
+      if (controllerType == ControllerTypeTinyMPC) {
+        DEBUG_PRINT("control: %f %f %f %f\n", (double)control.normalizedForces[0], (double)control.normalizedForces[1], (double)control.normalizedForces[2], (double)control.normalizedForces[3]);
+      }
 
       checkEmergencyStopTimeout();
 
