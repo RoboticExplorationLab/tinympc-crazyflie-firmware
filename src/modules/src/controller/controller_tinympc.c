@@ -105,8 +105,6 @@ static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
 static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
 static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
 static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
-// static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
-// static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
 static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
 static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
 static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
@@ -361,16 +359,7 @@ static void tinympcControllerTask(void* parameters) {
         control_task.normalizedForces[1] = U[0].data[1] + u_hover;
         control_task.normalizedForces[2] = U[0].data[2] + u_hover;
         control_task.normalizedForces[3] = U[0].data[3] + u_hover;
-        // control_task.normalizedForces[0] = U[0].data[0];  // PWM 0..1
-        // control_task.normalizedForces[1] = U[0].data[1];
-        // control_task.normalizedForces[2] = U[0].data[2];
-        // control_task.normalizedForces[3] = U[0].data[3];
-      } 
-      // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control_task.normalizedForces[0]), (double)(control_task.normalizedForces[2]));
-      // control_task.normalizedForces[0] = 0.0f;
-      // control_task.normalizedForces[1] = 0.0f;
-      // control_task.normalizedForces[2] = 0.0f;
-      // control_task.normalizedForces[3] = 0.0f;
+      }
 
       control_task.controlMode = controlModePWM;
       
@@ -435,7 +424,3 @@ bool controllerTinyMPCTest() {
 // // LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
 
 // LOG_GROUP_STOP(ctrlTinyMPC)
-
-#ifdef __cplusplus
-}
-#endif
