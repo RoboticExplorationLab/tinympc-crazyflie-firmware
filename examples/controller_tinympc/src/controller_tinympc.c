@@ -29,9 +29,9 @@
 
 // #include <Eigen.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 #include <string.h>
 #include <stdint.h>
@@ -55,19 +55,6 @@ extern "C" {
 #define DEBUG_MODULE "CONTROLLER_TINYMPC"
 #include "debug.h"
 
-#define nop()  __asm__("nop")
-int _sbrk() { return -1; }
-int _close() { return -1; }
-int _read() { return -1; }
-int _fstat() { return -1; }
-int _isatty() { return -1; }
-int _lseek() { return -1; }
-
-int _write(int file, char* ptr, int len)
-{
-   nop();
-}
-
 void appMain() {
   DEBUG_PRINT("Waiting for activation ...\n");
 
@@ -87,34 +74,9 @@ void appMain() {
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_250_HZ  // control frequency
 
-// #include "params_50hz_agg.h"
 #include "params_250hz.h"
 
 /* Allocate global variables for MPC */
-
-// Precompute data offline
-static sfloat A_data[NSTATES*NSTATES] = {
-  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
-  0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
-  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
-};
-
-static sfloat B_data[NSTATES*NINPUTS] = {
-  -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
-  0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
-  0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
-  -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
-};
-
 static sfloat f_data[NSTATES] = {0};
 
 // Create data array, all zero initialization
@@ -154,34 +116,26 @@ static Matrix B;
 static Matrix f;
 
 // Create TinyMPC struct
-tiny_Model model;
-tiny_AdmmSettings stgs;
-tiny_AdmmData data;
-tiny_AdmmInfo info;
-tiny_AdmmSolution soln;
-tiny_AdmmWorkspace work;
+static tiny_Model model;
+static tiny_AdmmSettings stgs;
+static tiny_AdmmData data;
+static tiny_AdmmInfo info;
+static tiny_AdmmSolution soln;
+static tiny_AdmmWorkspace work;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-uint32_t mpcTime = 0;
-float u_hover = 0.67f;
-
-float setpoint_z = 0.1f;
-float setpoint_x = 0.0f;
-int z_sign = 1;
-int8_t result = 0;
+static uint32_t mpcTime = 0;
+static float u_hover = 0.67f;
+static int8_t result = 0;
 
 void controllerOutOfTreeInit(void) {
-  // if (isInit) {
-  //   return;
-  // }
-
   /* Start MPC initialization*/
   
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
   tiny_InitSettings(&stgs);
 
-  stgs.rho_init = 100.0f;  // IMPORTANT (select offline, associated with precomp.)
+  stgs.rho_init = 250.0f;  // IMPORTANT (select offline, associated with precomp.)
 
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
@@ -214,17 +168,12 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 6;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 1;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
-  setpoint_z = 0.1f;
-  setpoint_x = 0.0f;
-  z_sign = 1;
-
-  // isInit = true;
   /* End of MPC initialization */  
 }
 
@@ -242,18 +191,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   uint64_t startTimestamp = usecTimestamp();
 
-  // // Rule to take-off and land gradually
-  // // if (RATE_DO_EXECUTE(10, tick)) {    
-  // //   setpoint_z += z_sign * 0.1f;
-  // //   if (setpoint_z > 1.0f) z_sign = -1;
-  // //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
-  // //   setpoint_x += 1.0f;
-  // //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
-  // // }
-
-  // /* Get goal state (reference) */
-  // // xg_data[0]  = setpoint_x; 
-  // // xg_data[2]  = setpoint_z; 
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
   xg_data[2]  = setpoint->position.z;
@@ -348,13 +285,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 /**
  * Tunning variables for the full state quaternion LQR controller
  */
-// PARAM_GROUP_START(ctrlMPC)
-// /**
-//  * @brief K gain
-//  */
-// PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+PARAM_GROUP_START(ctrlMPC)
 
-// PARAM_GROUP_STOP(ctrlMPC)
+PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uhover, &u_hover)
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
+
+PARAM_GROUP_STOP(ctrlMPC)
 
 /**
  * Logging variables for the command and reference signals for the
@@ -394,6 +331,6 @@ LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
 
 LOG_GROUP_STOP(ctrlMPC)
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif

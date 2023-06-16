@@ -1,8 +1,5 @@
 #include "utils.h"
 
-#include <Eigen.h>
-#include <cf_math.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -255,70 +252,70 @@ void MatScale(Matrix A, sfloat alpha) {
 }
 
 void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
-  // int n = A.rows;
-  // int m = A.cols; 
-  // int p = B.cols;
-  // sfloat Aik;
-  // sfloat Bkj;
-  // sfloat Cij;
-  // int ij;
-  // for (int i = 0; i < n; ++i) {
-  //   for (int j = 0; j < p; ++j) {
-  //     ij = i + j * n;
-  //     Cij = 0;
-  //     for (int k = 0; k < m; ++k) {  // columns of A, rows of B
-  //       Aik = A.data[i + n * k];
-  //       Bkj = B.data[k + m * j];
-  //       Cij += Aik * Bkj;
-  //     }
-  //     C.data[ij] = alpha * Cij + beta * C.data[ij];
-  //   }
-  // }
-
   int n = A.rows;
-  int m = A.cols;  // = B.rows
+  int m = A.cols; 
   int p = B.cols;
+  sfloat Aik;
+  sfloat Bkj;
+  sfloat Cij;
+  int ij;
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < p; ++j) {
+      ij = i + j * n;
+      Cij = 0;
+      for (int k = 0; k < m; ++k) {  // columns of A, rows of B
+        Aik = A.data[i + n * k];
+        Bkj = B.data[k + m * j];
+        Cij += Aik * Bkj;
+      }
+      C.data[ij] = alpha * Cij + beta * C.data[ij];
+    }
+  }
+
+  // int n = A.rows;
+  // int m = A.cols;  // = B.rows
+  // int p = B.cols;
 
   // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
   //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
   //     + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m) 
   //     * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p);
-  Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
-      beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
-      + alpha * (Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
+  // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * (Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
 }
 
 void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
-  // int n = A.rows;
-  // int m = A.cols;
-  // int p = B.cols;
-  // sfloat Aik;
-  // sfloat Bkj;
-  // sfloat Cij;
-  // int ij;
-  // for (int i = 0; i < n; ++i) {
-  //   for (int j = 0; j < p; ++j) {
-  //     ij = i + j * n;
-  //     Cij = 0;
-  //     for (int k = 0; k < m; ++k) {  // columns of A, rows of B
-  //       Aik = A.data[i + n * k];
-  //       Bkj = B.data[k + m * j];
-  //       Cij += Aik * Bkj;
-  //     }
-  //     D.data[ij] = alpha * Cij + beta * C.data[ij];
-  //   }
-  // }
   int n = A.rows;
-  int m = A.cols;  // = B.rows
+  int m = A.cols;
   int p = B.cols;
+  sfloat Aik;
+  sfloat Bkj;
+  sfloat Cij;
+  int ij;
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < p; ++j) {
+      ij = i + j * n;
+      Cij = 0;
+      for (int k = 0; k < m; ++k) {  // columns of A, rows of B
+        Aik = A.data[i + n * k];
+        Bkj = B.data[k + m * j];
+        Cij += Aik * Bkj;
+      }
+      D.data[ij] = alpha * Cij + beta * C.data[ij];
+    }
+  }
+  // int n = A.rows;
+  // int m = A.cols;  // = B.rows
+  // int p = B.cols;
 
   // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(D.data, n, p) = 
   //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
   //     + alpha * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m) 
   //     * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p);
-  Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(D.data, n, p) = 
-      beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
-      + alpha * (Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
+  // Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(D.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * (Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<sfloat, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
 }
 
 #ifdef __cplusplus
