@@ -55,8 +55,6 @@ static SemaphoreHandle_t runTaskSemaphore;
 static SemaphoreHandle_t dataMutex;
 static StaticSemaphore_t dataMutexBuffer;
 
-// #defines and variables for MPC
-
 
 // Macro variables
 #define DT 0.02f       // dt
@@ -64,8 +62,15 @@ static StaticSemaphore_t dataMutexBuffer;
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
-#define MPC_RATE RATE_50_HZ  // control frequency
+#define MPC_RATE RATE_250_HZ  // control frequency
 
+#if MPC_RATE == RATE_50_HZ
+  #include "tinympc/data/params_50hz.h"
+#elif MPC_RATE == RATE_250_HZ
+  #include "tinympc/data/params_250hz.h"
+#endif
+
+/* Allocate global variables for MPC */
 
 // Precompute data offline
 static sfloat A_data[NSTATES*NSTATES] = {
@@ -137,6 +142,7 @@ tiny_AdmmSolution soln;
 tiny_AdmmWorkspace work;
 
 
+
 // Structs to keep track of data sent to and received by stabilizer loop
 
 // Updates at 1khz
@@ -153,11 +159,8 @@ control_t control_task;
 
 
 // Misc variables
-
-static float u_hover = 0.66f;  // ~ mass/max_thrust
-
-// Struct for logging position information
-// uint32_t mpcTime = 0;
+static uint32_t mpcTime = 0;
+static float u_hover = 0.66f;  // ~ mass/max_thrust/4
 static bool isInit = false;
 
 
@@ -170,6 +173,53 @@ void controllerTinyMPCInit(void)
   if (isInit) {
     return;
   }
+
+  /* Initialize MPC */
+  
+  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
+  tiny_InitSettings(&stgs);
+
+  stgs.rho_init = 100.0f;  // IMPORTANT (select offline, associated with precomp.)
+
+  tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
+  
+  // Fill in the remaining struct 
+  tiny_InitWorkspaceTempData(&work, ZU, ZU_new, 0, 0, temp_data);
+  tiny_InitPrimalCache(&work, Quu_inv_data, AmBKt_data, coeff_d2p_data);
+
+  tiny_InitModelFromArray(&model, &A, &B, &f, A_data, B_data, f_data);
+  tiny_InitSolnTrajFromArray(&work, X, U, X_data, U_data);
+  tiny_InitSolnGainsFromArray(&work, d, p, d_data, p_data, Kinf_data, Pinf_data);
+  tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
+
+  tiny_SetInitialState(&work, x0_data);  
+  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+
+  // Set up LQR cost 
+  tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
+  slap_AddIdentity(data.R, work.rho); // \tilde{R}
+  tiny_InitDataLinearCostFromArray(&work, q, r, r_tilde, q_data, r_data, r_tilde_data);
+
+  // Set up constraints 
+  tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
+  slap_SetConst(data.ucu, 0.5);   // UPPER CONTROL BOUND 
+  slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
+
+  // Initialize linear cost (for tracking)
+  tiny_UpdateLinearCost(&work);
+
+  // Solver settings 
+  stgs.en_cstr_goal = 0;
+  stgs.en_cstr_inputs = 1;
+  stgs.en_cstr_states = 0;
+  stgs.max_iter = 6;           // limit this if needed
+  stgs.verbose = 0;
+  stgs.check_termination = 1;
+  stgs.tol_abs_dual = 5e-2;
+  stgs.tol_abs_prim = 5e-2;
+
+
+  /* Initialize task */
 
   runTaskSemaphore = xSemaphoreCreateBinary();
   ASSERT(runTaskSemaphore);
@@ -225,7 +275,7 @@ static void tinympcControllerTask(void* parameters) {
 
     /* Controller rate */
     if (nowMs >= nextPredictionMs) {
-      nextPredictionMs = nowMs + (1000.0f / LQR_RATE);
+      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
 
       // /* Get goal state_task (reference) */
       xg_data[0]  = setpoint_task.position.x;
