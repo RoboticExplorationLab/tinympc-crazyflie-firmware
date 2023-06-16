@@ -393,18 +393,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   
   /* Output control */
-  // if (setpoint->mode.z == modeDisable) {
-  //   control->normalizedForces[0] = 0.0f;
-  //   control->normalizedForces[1] = 0.0f;
-  //   control->normalizedForces[2] = 0.0f;
-  //   control->normalizedForces[3] = 0.0f;
-  // } else {
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
     control->normalizedForces[0] = Uhrz[0](0) + u_hover;  // PWM 0..1
     control->normalizedForces[1] = Uhrz[0](1) + u_hover;
     control->normalizedForces[2] = Uhrz[0](2) + u_hover;
     control->normalizedForces[3] = Uhrz[0](3) + u_hover;
-  // } 
-  DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
+  } 
+  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
   control->normalizedForces[0] = 0.0f;
   control->normalizedForces[1] = 0.0f;

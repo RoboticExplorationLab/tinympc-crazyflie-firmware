@@ -27,6 +27,12 @@
 
 // 50HZ
 
+// #include <Eigen.h>
+
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
+
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -61,41 +67,16 @@ void appMain() {
 }
 
 // Macro variables
-#define DT 0.02f       // dt
+#define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
-#define MPC_RATE RATE_50_HZ  // control frequency
+#define MPC_RATE RATE_250_HZ  // control frequency
 
-// #include "params_50hz_agg.h"
-#include "params_50hz.h"
+#include "params_250hz.h"
 
 /* Allocate global variables for MPC */
-
-// Precompute data offline
-static sfloat A_data[NSTATES*NSTATES] = {
-  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.004234f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,-0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.004234f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.392400f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.020000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000014f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,-0.001807f,0.000000f,1.000000f,0.000000f,0.000000f,
-  0.000014f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.001807f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,
-  0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
-};
-
-static sfloat B_data[NSTATES*NINPUTS] = {
-  -0.000019f,0.000019f,0.000962f,-0.027012f,-0.027145f,0.001937f,-0.002989f,0.002974f,0.096236f,-5.402457f,-5.428992f,0.387450f,
-  0.000021f,0.000021f,0.000962f,-0.029747f,0.029850f,-0.000709f,0.003287f,0.003275f,0.096236f,-5.949452f,5.969943f,-0.141728f,
-  0.000019f,-0.000019f,0.000962f,0.027043f,0.027230f,-0.002731f,0.002998f,-0.002978f,0.096236f,5.408501f,5.445914f,-0.546295f,
-  -0.000021f,-0.000021f,0.000962f,0.029717f,-0.029934f,0.001503f,-0.003296f,-0.003272f,0.096236f,5.943408f,-5.986864f,0.300572f,
-};
-
 static sfloat f_data[NSTATES] = {0};
 
 // Create data array, all zero initialization
@@ -135,34 +116,26 @@ static Matrix B;
 static Matrix f;
 
 // Create TinyMPC struct
-tiny_Model model;
-tiny_AdmmSettings stgs;
-tiny_AdmmData data;
-tiny_AdmmInfo info;
-tiny_AdmmSolution soln;
-tiny_AdmmWorkspace work;
+static tiny_Model model;
+static tiny_AdmmSettings stgs;
+static tiny_AdmmData data;
+static tiny_AdmmInfo info;
+static tiny_AdmmSolution soln;
+static tiny_AdmmWorkspace work;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-uint32_t mpcTime = 0;
-float u_hover = 0.6f;
-
-float setpoint_z = 0.1f;
-float setpoint_x = 0.0f;
-int z_sign = 1;
-int8_t result = 0;
+static uint32_t mpcTime = 0;
+static float u_hover = 0.67f;
+static int8_t result = 0;
 
 void controllerOutOfTreeInit(void) {
-  // if (isInit) {
-  //   return;
-  // }
-
   /* Start MPC initialization*/
   
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
   tiny_InitSettings(&stgs);
 
-  stgs.rho_init = 50.0f;  // IMPORTANT (select offline, associated with precomp.)
+  stgs.rho_init = 250.0f;  // IMPORTANT (select offline, associated with precomp.)
 
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
@@ -180,16 +153,13 @@ void controllerOutOfTreeInit(void) {
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
-  // sfloat Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  // slap_SetDiagonal(data.Q, Qdiag, NSTATES);
-  // slap_SetIdentity(data.R, 1);
   slap_AddIdentity(data.R, work.rho); // \tilde{R}
   tiny_InitDataLinearCostFromArray(&work, q, r, r_tilde, q_data, r_data, r_tilde_data);
 
   // Set up constraints 
   tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
-  slap_SetConst(data.ucu, 0.5);   // UPPER CONTROL BOUND 
-  slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
+  slap_SetConst(data.ucu, (1 - u_hover));   // UPPER CONTROL BOUND 
+  slap_SetConst(data.lcu, (-u_hover));  // LOWER CONTROL BOUND 
 
   // Initialize linear cost (for tracking)
   tiny_UpdateLinearCost(&work);
@@ -198,17 +168,12 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 1;           // limit this if needed
+  stgs.max_iter = 9;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 1;
-  stgs.tol_abs_dual = 10e-2;
-  stgs.tol_abs_prim = 10e-2;
+  stgs.check_termination = 3;
+  stgs.tol_abs_dual = 2e-2;
+  stgs.tol_abs_prim = 2e-2;
 
-  setpoint_z = 0.1f;
-  setpoint_x = 0.0f;
-  z_sign = 1;
-
-  // isInit = true;
   /* End of MPC initialization */  
 }
 
@@ -226,27 +191,15 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   uint64_t startTimestamp = usecTimestamp();
 
-  // Rule to take-off and land gradually
-  // if (RATE_DO_EXECUTE(10, tick)) {    
-  //   setpoint_z += z_sign * 0.1f;
-  //   if (setpoint_z > 1.0f) z_sign = -1;
-  //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
-  //   setpoint_x += 1.0f;
-  //   if (setpoint_x > 2.0f) setpoint_x = 2.0f;
-  // }
-
-  /* Get goal state (reference) */
-  // xg_data[0]  = setpoint_x; 
-  // xg_data[2]  = setpoint_z; 
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
   xg_data[2]  = setpoint->position.z;
   xg_data[6]  = setpoint->velocity.x;
   xg_data[7]  = setpoint->velocity.y;
   xg_data[8]  = setpoint->velocity.z;
-  xg_data[9]  = setpoint->attitudeRate.roll;
-  xg_data[10] = setpoint->attitudeRate.pitch;
-  xg_data[11] = setpoint->attitudeRate.yaw;
+  xg_data[9]  = radians(setpoint->attitudeRate.roll);
+  xg_data[10] = radians(setpoint->attitudeRate.pitch);
+  xg_data[11] = radians(setpoint->attitudeRate.yaw);
   struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                  radians(setpoint->attitude.pitch), 
                                  radians(setpoint->attitude.yaw));
@@ -289,8 +242,14 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
   tiny_SolveAdmm(&work);
+
+  // // JUST LQR
+  // MatAdd(data.x0, data.x0, Xref[0], -1);
   // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+
   mpcTime = usecTimestamp() - startTimestamp;
+
+  // DEBUG_PRINT("U[0] = [%.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]));
 
   // DEBUG_PRINT("U[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(U[0].data[0]), (double)(U[0].data[1]), (double)(U[0].data[2]), (double)(U[0].data[3]));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(ZU[0].data[0]), (double)(ZU[0].data[1]), (double)(ZU[0].data[2]), (double)(ZU[0].data[3]));
@@ -298,7 +257,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("%d\n", mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
   /* Output control */
@@ -313,11 +273,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = U[0].data[2] + u_hover;
     control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
-
-  control->normalizedForces[0] = 0.0f;
-  control->normalizedForces[1] = 0.0f;
-  control->normalizedForces[2] = 0.0f;
-  control->normalizedForces[3] = 0.0f;
+  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
@@ -326,10 +286,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  * Tunning variables for the full state quaternion LQR controller
  */
 PARAM_GROUP_START(ctrlMPC)
-/**
- * @brief K gain
- */
-PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+
+PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uhover, &u_hover)
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
 
 PARAM_GROUP_STOP(ctrlMPC)
 
@@ -370,3 +330,7 @@ LOG_ADD(LOG_FLOAT, yu2, &(YU_data[2]))
 LOG_ADD(LOG_FLOAT, yu3, &(YU_data[3]))
 
 LOG_GROUP_STOP(ctrlMPC)
+
+// #ifdef __cplusplus
+// }
+// #endif

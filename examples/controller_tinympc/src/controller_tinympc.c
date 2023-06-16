@@ -72,7 +72,7 @@ void appMain() {
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
-#define MPC_RATE RATE_250_HZ  // control frequency
+#define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_250hz.h"
 
@@ -158,8 +158,8 @@ void controllerOutOfTreeInit(void) {
 
   // Set up constraints 
   tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
-  slap_SetConst(data.ucu, 0.5);   // UPPER CONTROL BOUND 
-  slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
+  slap_SetConst(data.ucu, (1 - u_hover));   // UPPER CONTROL BOUND 
+  slap_SetConst(data.lcu, (-u_hover));  // LOWER CONTROL BOUND 
 
   // Initialize linear cost (for tracking)
   tiny_UpdateLinearCost(&work);
@@ -168,9 +168,9 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 8;           // limit this if needed
+  stgs.max_iter = 9;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 1;
+  stgs.check_termination = 3;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
