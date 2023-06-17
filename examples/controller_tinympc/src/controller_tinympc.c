@@ -25,13 +25,9 @@
  * controller_tinympc.c - App layer application of TinyMPC.
  */
 
-// 50HZ
-
-// #include <Eigen.h>
-
-// #ifdef __cplusplus
-// extern "C" {
-// #endif
+/** 
+ * Test waypoint storage
+ */
 
 #include <string.h>
 #include <stdint.h>
@@ -71,10 +67,10 @@ void appMain() {
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
+#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -83,6 +79,7 @@ static sfloat f_data[NSTATES] = {0};
 static sfloat x0_data[NSTATES] = {0.0f};       // initial state
 static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
 static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
+static sfloat Xref_data[NSTATES * NHORIZON] = {0};
 static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
 static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
 static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
@@ -97,8 +94,8 @@ static sfloat umax_data[NINPUTS] = {0.0f};
 static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
-static Matrix Xref[NSIM];
-static Matrix Uref[NSIM - 1];
+static Matrix Xref[NHORIZON];
+static Matrix Uref[NHORIZON - 1];
 static Matrix X[NHORIZON];
 static Matrix U[NHORIZON - 1];
 static Matrix d[NHORIZON - 1];
@@ -126,6 +123,9 @@ static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
+static uint32_t step = 0;
+static int8_t step_keep = 10;  // keeping current trajectory for this no of steps
+static bool enTraj = false;
 
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
@@ -147,7 +147,19 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
-  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+  // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+
+  for (int i = 0; i < NHORIZON; ++i) {
+    if (i < NHORIZON - 1) {
+      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
+    }
+    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
+  }
+  for (int i = 0; i < NHORIZON; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
+    }
+  }
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
@@ -169,10 +181,12 @@ void controllerOutOfTreeInit(void) {
   stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
-  stgs.tol_abs_dual = 1e-2;
-  stgs.tol_abs_prim = 1e-2;
+  stgs.tol_abs_dual = 5e-2;
+  stgs.tol_abs_prim = 5e-2;
 
   /* End of MPC initialization */  
+  step = 0;
+  enTraj = true;
 }
 
 bool controllerOutOfTreeTest() {
@@ -189,23 +203,32 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   uint64_t startTimestamp = usecTimestamp();
 
-  xg_data[0]  = setpoint->position.x;
-  xg_data[1]  = setpoint->position.y;
-  xg_data[2]  = setpoint->position.z;
-  xg_data[6]  = setpoint->velocity.x;
-  xg_data[7]  = setpoint->velocity.y;
-  xg_data[8]  = setpoint->velocity.z;
-  xg_data[9]  = radians(setpoint->attitudeRate.roll);
-  xg_data[10] = radians(setpoint->attitudeRate.pitch);
-  xg_data[11] = radians(setpoint->attitudeRate.yaw);
-  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-                                 radians(setpoint->attitude.pitch), 
-                                 radians(setpoint->attitude.yaw));
-  struct quat attitude = rpy2quat(desired_rpy);
-  struct vec phi = quat2rp(qnormalize(attitude));  
-  xg_data[3] = phi.x;
-  xg_data[4] = phi.y;
-  xg_data[5] = phi.z;
+  // Update reference: 3 positions, k counts each MPC step
+  if (step % step_keep == 0 && enTraj == true) {
+    for (int i = 0; i < NHORIZON; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        Xref_data[i*NSTATES + j] = X_ref_data[(step+i)*3+j];
+      }
+    }
+  }
+
+  // xg_data[0]  = setpoint->position.x;
+  // xg_data[1]  = setpoint->position.y;
+  // xg_data[2]  = setpoint->position.z;
+  // xg_data[6]  = setpoint->velocity.x;
+  // xg_data[7]  = setpoint->velocity.y;
+  // xg_data[8]  = setpoint->velocity.z;
+  // xg_data[9]  = radians(setpoint->attitudeRate.roll);
+  // xg_data[10] = radians(setpoint->attitudeRate.pitch);
+  // xg_data[11] = radians(setpoint->attitudeRate.yaw);
+  // struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+  //                                radians(setpoint->attitude.pitch), 
+  //                                radians(setpoint->attitude.yaw));
+  // struct quat attitude = rpy2quat(desired_rpy);
+  // struct vec phi = quat2rp(qnormalize(attitude));  
+  // xg_data[3] = phi.x;
+  // xg_data[4] = phi.y;
+  // xg_data[5] = phi.z;
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -221,12 +244,12 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x0_data[9]  = radians(sensors->gyro.x);   
   x0_data[10] = radians(sensors->gyro.y);
   x0_data[11] = radians(sensors->gyro.z);
-  attitude = mkquat(
+  struct quat attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
-  phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+  struct vec phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
   // Attitude error
   x0_data[3] = phi.x;
   x0_data[4] = phi.y;
@@ -272,12 +295,17 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
+
+  step += 1;
+  if (step >= step_keep * 1000) {
+    enTraj = false;
+  } 
 }
 
 /**
