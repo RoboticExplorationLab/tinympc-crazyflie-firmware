@@ -74,7 +74,7 @@ void appMain() {
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-#include "params_250hz.h"
+#include "params_500hz.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -87,8 +87,6 @@ static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
 static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
 static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
 static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
-// static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
-// static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
 static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
 static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
 static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
@@ -168,11 +166,11 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 9;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 3;
-  stgs.tol_abs_dual = 5e-2;
-  stgs.tol_abs_prim = 5e-2;
+  stgs.check_termination = 2;
+  stgs.tol_abs_dual = 1e-2;
+  stgs.tol_abs_prim = 1e-2;
 
   /* End of MPC initialization */  
 }
