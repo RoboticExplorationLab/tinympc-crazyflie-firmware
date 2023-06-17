@@ -13,7 +13,7 @@ config CROSS_COMPILE
 
 config DEBUG
     bool "Enable debug build"
-    default n
+    default y
     help
         Enable debug symbols and extra output from firmware.
 
@@ -33,7 +33,7 @@ config DEBUG_ENABLE_LED_MORSE
 
 config DEBUG_PRINT_ON_UART1
     bool "Switch DEBUG_PRINT to UART1"
-    default n
+    default y
     help
       Switch output of DEBUG_PRINT from radio to UART1.
       Note! This will interfere with several expansion decks, see the expansion

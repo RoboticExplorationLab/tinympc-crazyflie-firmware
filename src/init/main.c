@@ -46,7 +46,7 @@
 
 int main() 
 {
-  check_enter_bootloader();
+  // check_enter_bootloader();
 
   //Initialize the platform.
   int err = platformInit();

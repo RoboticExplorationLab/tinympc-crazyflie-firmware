@@ -149,6 +149,8 @@ void controllerOutOfTreeInit(void) {
   tiny_SetInitialState(&work, x0_data);  
   // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
 
+  data.Xref = Xref;
+  data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
     if (i < NHORIZON - 1) {
       Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
