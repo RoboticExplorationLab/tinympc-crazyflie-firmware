@@ -243,7 +243,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   uint64_t startTimestamp = usecTimestamp();
 
   // // Rule to take-off and land gradually
-  // // if (RATE_DO_EXECUTE(10, tick)) {    
+  // // if (RATE_DO_EXECUTE(10, tick)) {
   // //   setpoint_z += z_sign * 0.1f;
   // //   if (setpoint_z > 1.0f) z_sign = -1;
   // //   if (z_sign == -1 && setpoint_z < 0.2f) setpoint_z = 0.2f;
@@ -252,8 +252,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // // }
 
   // /* Get goal state (reference) */
-  // // xg_data[0]  = setpoint_x; 
-  // // xg_data[2]  = setpoint_z; 
+  // // xg_data[0]  = setpoint_x;
+  // // xg_data[2]  = setpoint_z;
   xg_data[0]  = setpoint->position.x;
   xg_data[1]  = setpoint->position.y;
   xg_data[2]  = setpoint->position.z;
