@@ -72,28 +72,28 @@ static StaticSemaphore_t dataMutexBuffer;
 
 /* Allocate global variables for MPC */
 
-// Precompute data offline
-static sfloat A_data[NSTATES*NSTATES] = {
-  1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-  0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
-  0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
-  -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
-};
+// // Precompute data offline
+// static sfloat A_data[NSTATES*NSTATES] = {
+//   1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
+//   0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
+//   0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
+//   -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
+// };
 
-static sfloat B_data[NSTATES*NINPUTS] = {
-  -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
-  0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
-  0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
-  -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
-};
+// static sfloat B_data[NSTATES*NINPUTS] = {
+//   -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
+//   0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
+//   0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
+//   -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
+// };
 
 static sfloat f_data[NSTATES] = {0};
 
@@ -158,7 +158,7 @@ control_t control_task;
 
 // Misc variables
 static uint32_t mpcTime = 0;
-static float u_hover = 0.66f;  // ~ mass/max_thrust/4
+static float u_hover = 0.7f;  // ~ mass/max_thrust/4
 static bool isInit = false;
 
 
@@ -269,11 +269,11 @@ static void tinympcControllerTask(void* parameters) {
     nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
     
     // // Get current time
-    // uint64_t startTimestamp = usecTimestamp();
+    uint64_t startTimestamp = usecTimestamp();
 
     /* Controller rate */
     if (nowMs >= nextPredictionMs) {
-      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
+      nextPredictionMs = nowMs + (1000.0f / 50);
 
       // /* Get goal state_task (reference) */
       xg_data[0]  = setpoint_task.position.x;
@@ -323,15 +323,17 @@ static void tinympcControllerTask(void* parameters) {
       // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
       // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
-      //// Solve optimization problem using ADMM
-      // tiny_UpdateLinearCost(&work);
-      // tiny_SolveAdmm(&work);
+
+      // Solve optimization problem using ADMM
+      DEBUG_PRINT("running ADMM\n");
+      tiny_UpdateLinearCost(&work);
+      tiny_SolveAdmm(&work);
       /* MPC solve end */
 
 
       /* LQR solve */
-      MatAdd(data.x0, data.x0, Xref[0], -1);
-      MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+      // MatAdd(data.x0, data.x0, Xref[0], -1);
+      // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
       /* LQR solve end */
 
       // mpcTime = usecTimestamp() - startTimestamp;
@@ -347,27 +349,28 @@ static void tinympcControllerTask(void* parameters) {
       // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
       // DEBUG_PRINT("%d\n", mpcTime);
       // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
-
-      /* Output control_task */
-      if (setpoint_task.mode.z == modeDisable) {
-        control_task.normalizedForces[0] = 0.0f;
-        control_task.normalizedForces[1] = 0.0f;
-        control_task.normalizedForces[2] = 0.0f;
-        control_task.normalizedForces[3] = 0.0f;
-      } else {
-        control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
-        control_task.normalizedForces[1] = U[0].data[1] + u_hover;
-        control_task.normalizedForces[2] = U[0].data[2] + u_hover;
-        control_task.normalizedForces[3] = U[0].data[3] + u_hover;
-      }
-
-      control_task.controlMode = controlModePWM;
-      
-      // Copy the controls calculated by the task loop to the global control_data
-      xSemaphoreTake(dataMutex, portMAX_DELAY);
-      memcpy(&control_data, &control_task, sizeof(control_t));
-      xSemaphoreGive(dataMutex);
     }
+
+    /* Output control_task */
+    if (setpoint_task.mode.z == modeDisable) {
+      control_task.normalizedForces[0] = 0.0f;
+      control_task.normalizedForces[1] = 0.0f;
+      control_task.normalizedForces[2] = 0.0f;
+      control_task.normalizedForces[3] = 0.0f;
+    } else {
+      control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+      control_task.normalizedForces[1] = U[0].data[1] + u_hover;
+      control_task.normalizedForces[2] = U[0].data[2] + u_hover;
+      control_task.normalizedForces[3] = U[0].data[3] + u_hover;
+    }
+
+    control_task.controlMode = controlModePWM;
+    
+    // Copy the controls calculated by the task loop to the global control_data
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    memcpy(&control_data, &control_task, sizeof(control_t));
+    xSemaphoreGive(dataMutex);
+
   }
 }
 

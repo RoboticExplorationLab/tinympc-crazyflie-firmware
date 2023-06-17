@@ -12,6 +12,7 @@
 #include "autoconf.h"
 
 #define DEFAULT_CONTROLLER ControllerTypePID
+// #define DEFAULT_CONTROLLER ControllerTypeTinyMPC
 static ControllerType currentController = ControllerTypeAutoSelect;
 
 static void initController();
