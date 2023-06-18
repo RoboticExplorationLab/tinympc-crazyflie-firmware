@@ -306,7 +306,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   control->controlMode = controlModePWM;
   
-  if (step >= trajHold * 1900) {
+  // stop trajectory at the end
+  if (step >= 4498) { 
     enTraj = false;
   } 
   else step += 1;

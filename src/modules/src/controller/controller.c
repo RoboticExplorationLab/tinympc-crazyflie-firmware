@@ -7,9 +7,10 @@
 #include "controller_mellinger.h"
 #include "controller_indi.h"
 #include "controller_brescianini.h"
-
 #include "autoconf.h"
-
+// Flash |  288464/1032192 (28%),  743728 free | text: 279320, data: 9144, ccmdata: 0
+// RAM   |   77704/131072  (59%),   53368 free | bss: 68560, data: 9144
+// CCM   |   41748/65536   (64%),   23788 free | ccmbss: 41748, ccmdata: 0
 #define DEFAULT_CONTROLLER ControllerTypePID
 // #define DEFAULT_CONTROLLER ControllerTypeOot
 static ControllerType currentController = ControllerTypeAutoSelect;
