@@ -66,7 +66,7 @@ void appMain() {
 #define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
-#define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
@@ -124,9 +124,10 @@ static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
-static uint32_t trajIdx = 0;
-static int8_t trajHold = 10;  // hold current trajectory for this no of steps
-static bool enTraj = false;
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
+static uint32_t traj_idx = 0;
+static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
+static bool en_traj = false;
 
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
@@ -181,7 +182,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 8;           // limit this if needed
+  stgs.max_iter = 6;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
@@ -189,7 +190,7 @@ void controllerOutOfTreeInit(void) {
 
   /* End of MPC initialization */  
   step = 0;
-  enTraj = true;
+  en_traj = true;
 }
 
 bool controllerOutOfTreeTest() {
@@ -207,11 +208,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   uint64_t startTimestamp = usecTimestamp();
 
   // Update reference: 3 positions, k counts each MPC step
-  if (step % trajHold == 0 && enTraj == true) {
-    trajIdx = (int)(step / trajHold);
+  if (step % traj_hold == 0 && en_traj == true) {
+    traj_idx = (int)(step / traj_hold);
     for (int i = 0; i < NHORIZON; ++i) {
       for (int j = 0; j < 3; ++j) {
-        Xref_data[i*NSTATES + j] = X_ref_data[(trajIdx + i)*3+j];
+        Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
       }
     }
   }
@@ -307,8 +308,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   control->controlMode = controlModePWM;
   
   // stop trajectory at the end
-  if (step >= 4498) { 
-    enTraj = false;
+  if (traj_idx >= traj_length - NHORIZON) { 
+    en_traj = false;
   } 
   else step += 1;
 }
@@ -318,7 +319,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  */
 PARAM_GROUP_START(ctrlMPC)
 
-PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uhover, &u_hover)
+PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uHover, &u_hover)
+PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, trajLength, &traj_length)
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajHold, &traj_hold)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
 
