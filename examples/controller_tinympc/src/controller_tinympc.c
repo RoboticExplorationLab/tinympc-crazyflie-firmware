@@ -124,7 +124,8 @@ static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
-static int8_t step_keep = 10;  // keeping current trajectory for this no of steps
+static uint32_t trajIdx = 0;
+static int8_t trajHold = 10;  // hold current trajectory for this no of steps
 static bool enTraj = false;
 
 void controllerOutOfTreeInit(void) {
@@ -206,14 +207,15 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   uint64_t startTimestamp = usecTimestamp();
 
   // Update reference: 3 positions, k counts each MPC step
-  if (step % step_keep == 0 && enTraj == true) {
+  if (step % trajHold == 0 && enTraj == true) {
+    trajIdx = (int)(step / trajHold);
     for (int i = 0; i < NHORIZON; ++i) {
       for (int j = 0; j < 3; ++j) {
-        Xref_data[i*NSTATES + j] = X_ref_data[(step+i)*3+j];
+        Xref_data[i*NSTATES + j] = X_ref_data[(trajIdx + i)*3+j];
       }
     }
   }
-
+  // DEBUG_PRINT("Xref = [%.2f]\n", (double)(Xref[0].data[0]));
   // xg_data[0]  = setpoint->position.x;
   // xg_data[1]  = setpoint->position.y;
   // xg_data[2]  = setpoint->position.z;
@@ -280,7 +282,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  DEBUG_PRINT("%d %d %d %d \n", step, info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("%d\n", mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
@@ -297,17 +299,17 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[3] = U[0].data[3] + u_hover;
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
-  control->normalizedForces[0] = 0.0f;
-  control->normalizedForces[1] = 0.0f;
-  control->normalizedForces[2] = 0.0f;
-  control->normalizedForces[3] = 0.0f;
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
-
-  step += 1;
-  if (step >= step_keep * 1000) {
+  
+  if (step >= trajHold * 1900) {
     enTraj = false;
   } 
+  else step += 1;
 }
 
 /**
