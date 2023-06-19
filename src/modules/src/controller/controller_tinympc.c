@@ -57,44 +57,22 @@ static StaticSemaphore_t dataMutexBuffer;
 
 
 // Macro variables
-#define DT 0.02f       // dt
+#define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
-#define MPC_RATE RATE_250_HZ  // control frequency
+#define MPC_RATE RATE_500_HZ  // control frequency
 
 #if MPC_RATE == RATE_50_HZ
   #include "tinympc/data/params_50hz.h"
 #elif MPC_RATE == RATE_250_HZ
   #include "tinympc/data/params_250hz.h"
+#elif MPC_RATE == RATE_500_HZ
+  #include "tinympc/data/params_500hz.h"
 #endif
 
 /* Allocate global variables for MPC */
-
-// // Precompute data offline
-// static sfloat A_data[NSTATES*NSTATES] = {
-//   1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,-0.000157f,0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,-0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000157f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.078480f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,-0.000000f,-0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,0.000000f,0.004000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,
-//   0.000000f,-0.000000f,0.000000f,0.002000f,0.000000f,-0.000000f,0.000000f,-0.000078f,0.000000f,1.000000f,0.000000f,-0.000000f,
-//   0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,0.000000f,0.000078f,0.000000f,0.000000f,-0.000000f,1.000000f,0.000000f,
-//   -0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,0.002000f,-0.000000f,-0.000000f,0.000000f,0.000000f,-0.000000f,1.000000f,
-// };
-
-// static sfloat B_data[NSTATES*NINPUTS] = {
-//   -0.000000f,0.000000f,0.000034f,-0.001101f,-0.001107f,0.000079f,-0.000029f,0.000029f,0.016817f,-1.101418f,-1.106828f,0.078991f,
-//   0.000000f,0.000000f,0.000034f,-0.001213f,0.001217f,-0.000029f,0.000032f,0.000032f,0.016817f,-1.212936f,1.217114f,-0.028895f,
-//   0.000000f,-0.000000f,0.000034f,0.001103f,0.001110f,-0.000111f,0.000029f,-0.000029f,0.016817f,1.102651f,1.110278f,-0.111375f,
-//   -0.000000f,-0.000000f,0.000034f,0.001212f,-0.001221f,0.000061f,-0.000032f,-0.000032f,0.016817f,1.211704f,-1.220564f,0.061279f,
-// };
-
 static sfloat f_data[NSTATES] = {0};
 
 // Create data array, all zero initialization
@@ -132,13 +110,12 @@ static Matrix B;
 static Matrix f;
 
 // Create TinyMPC struct
-tiny_Model model;
-tiny_AdmmSettings stgs;
-tiny_AdmmData data;
-tiny_AdmmInfo info;
-tiny_AdmmSolution soln;
-tiny_AdmmWorkspace work;
-
+static tiny_Model model;
+static tiny_AdmmSettings stgs;
+static tiny_AdmmData data;
+static tiny_AdmmInfo info;
+static tiny_AdmmSolution soln;
+static tiny_AdmmWorkspace work;
 
 
 // Structs to keep track of data sent to and received by stabilizer loop
@@ -156,11 +133,11 @@ state_t state_task;
 control_t control_task;
 
 
-// Misc variables
+// Helper variables
+static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover = 0.7f;  // ~ mass/max_thrust/4
-static bool isInit = false;
-
+static float u_hover = 0.67f;
+static int8_t result = 0;
 
 static void tinympcControllerTask(void* parameters);
 
@@ -172,12 +149,12 @@ void controllerTinyMPCInit(void)
     return;
   }
 
-  /* Initialize MPC */
+  /* Start MPC initialization*/
   
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT);
   tiny_InitSettings(&stgs);
 
-  stgs.rho_init = 100.0f;  // IMPORTANT (select offline, associated with precomp.)
+  stgs.rho_init = 250.0f;  // IMPORTANT (select offline, associated with precomp.)
 
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
@@ -200,8 +177,8 @@ void controllerTinyMPCInit(void)
 
   // Set up constraints 
   tiny_SetInputBound(&work, Acu_data, umin_data, umax_data);
-  slap_SetConst(data.ucu, 0.5);   // UPPER CONTROL BOUND 
-  slap_SetConst(data.lcu, -0.5);  // LOWER CONTROL BOUND 
+  slap_SetConst(data.ucu, (1 - u_hover));   // UPPER CONTROL BOUND 
+  slap_SetConst(data.lcu, (-u_hover));  // LOWER CONTROL BOUND 
 
   // Initialize linear cost (for tracking)
   tiny_UpdateLinearCost(&work);
@@ -210,14 +187,16 @@ void controllerTinyMPCInit(void)
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 6;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 1;
-  stgs.tol_abs_dual = 5e-2;
-  stgs.tol_abs_prim = 5e-2;
+  stgs.check_termination = 2;
+  stgs.tol_abs_dual = 1e-2;
+  stgs.tol_abs_prim = 1e-2;
+
+  /* End of MPC initialization */  
 
 
-  /* Initialize task */
+  /* Start task initialization */
 
   runTaskSemaphore = xSemaphoreCreateBinary();
   ASSERT(runTaskSemaphore);
@@ -227,6 +206,9 @@ void controllerTinyMPCInit(void)
   STATIC_MEM_TASK_CREATE(tinympcTask, tinympcControllerTask, TINYMPC_TASK_NAME, NULL, TINYMPC_TASK_PRI);
 
   isInit = true;
+
+  /* End of task initialization */
+
 }
 
 
