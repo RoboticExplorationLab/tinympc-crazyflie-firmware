@@ -21,7 +21,7 @@ CRAZYFLIE_BASE := ../..
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/slap/src
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/src
 EXTRA_CFLAGS += -DSLAP_FLOAT=float
-# EXTRA_CFLAGS += -DNDEBUG
+EXTRA_CFLAGS += -DNDEBUG
 
 #
 # We override the default OOT_CONFIG here, we could also name our config
