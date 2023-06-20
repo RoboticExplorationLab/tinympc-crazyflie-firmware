@@ -351,7 +351,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Body velocity error, [m/s]                          
   x0(6) = state->velocity.x;
   x0(7) = state->velocity.y;
-  x0(8) = state->velocity.z - 1.0f;
+  x0(8) = state->velocity.z;
   // Angular rate error, [rad/s]
   x0(9)  = radians(sensors->gyro.x);   
   x0(10) = radians(sensors->gyro.y);
