@@ -140,7 +140,7 @@ static tiny_AdmmWorkspace work;
 static bool isInit = false;  // fix for tracking problem
 static uint64_t startTimestamp;
 static uint32_t mpcTime = 0;
-static float u_hover = 0.67f;
+static float u_hover = 0.7f;
 
 static float setpoint_z = 0.1f;
 static float setpoint_x = 0.0f;
@@ -324,40 +324,38 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // }
 
   /* Get goal state (reference) */
-  // xg[0]  = setpoint_x; 
-  // xg[2]  = setpoint_z; 
-  xg[0]  = setpoint->position.x;
-  xg[1]  = setpoint->position.y;
-  xg[2]  = setpoint->position.z;
-  xg[6]  = setpoint->velocity.x;
-  xg[7]  = setpoint->velocity.y;
-  xg[8]  = setpoint->velocity.z;
-  xg[9]  = radians(setpoint->attitudeRate.roll);
-  xg[10] = radians(setpoint->attitudeRate.pitch);
-  xg[11] = radians(setpoint->attitudeRate.yaw);
+  xg(0)  = setpoint->position.x;
+  xg(1)  = setpoint->position.y;
+  xg(2)  = setpoint->position.z;
+  xg(6)  = setpoint->velocity.x;
+  xg(7)  = setpoint->velocity.y;
+  xg(8)  = setpoint->velocity.z;
+  xg(9)  = radians(setpoint->attitudeRate.roll);
+  xg(10) = radians(setpoint->attitudeRate.pitch);
+  xg(11) = radians(setpoint->attitudeRate.yaw);
   struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                  radians(setpoint->attitude.pitch), 
                                  radians(setpoint->attitude.yaw));
   struct quat attitude = rpy2quat(desired_rpy);
   struct vec phi = quat2rp(qnormalize(attitude));  
-  xg[3] = phi.x;
-  xg[4] = phi.y;
-  xg[5] = phi.z;
+  xg(3) = phi.x;
+  xg(4) = phi.y;
+  xg(5) = phi.z;
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
-  x0[0] = state->position.x;
-  x0[1] = state->position.y;
-  x0[2] = state->position.z;
+  x0(0) = state->position.x;
+  x0(1) = state->position.y;
+  x0(2) = state->position.z;
   // Body velocity error, [m/s]                          
-  x0[6] = state->velocity.x;
-  x0[7] = state->velocity.y;
-  x0[8] = state->velocity.z;
+  x0(6) = state->velocity.x;
+  x0(7) = state->velocity.y;
+  x0(8) = state->velocity.z - 1.0f;
   // Angular rate error, [rad/s]
-  x0[9]  = radians(sensors->gyro.x);   
-  x0[10] = radians(sensors->gyro.y);
-  x0[11] = radians(sensors->gyro.z);
+  x0(9)  = radians(sensors->gyro.x);   
+  x0(10) = radians(sensors->gyro.y);
+  x0(11) = radians(sensors->gyro.z);
   attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
@@ -365,9 +363,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.w);  // current attitude
   phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
   // Attitude error
-  x0[3] = phi.x;
-  x0[4] = phi.y;
-  x0[5] = phi.z;
+  x0(3) = phi.x;
+  x0(4) = phi.y;
+  x0(5) = phi.z;
 
   /* MPC solve */
   
@@ -375,22 +373,22 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
   // Solve optimization problem using ADMM
-  // tiny_UpdateLinearCost(&work);
-  // tiny_SolveAdmm(&work);
+  tiny_UpdateLinearCost(&work);
+  tiny_SolveAdmm(&work);
 
   // // JUST LQR
-  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(xg(1)), (double)(xg(2)));
-  Uhrz[0] = -(Kinf) * (x0 - xg);
+  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(x0(1)), (double)(x0(2)));
+  // Uhrz[0] = -(Kinf) * (x0 - xg);
 
   mpcTime = usecTimestamp() - startTimestamp;
 
-  // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
+  DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   
   /* Output control */
   if (setpoint->mode.z == modeDisable) {
@@ -406,10 +404,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
-  control->normalizedForces[0] = 0.0f;
-  control->normalizedForces[1] = 0.0f;
-  control->normalizedForces[2] = 0.0f;
-  control->normalizedForces[3] = 0.0f;
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
 }
@@ -432,21 +430,21 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
 LOG_GROUP_START(ctrlMPC)
 
-LOG_ADD(LOG_FLOAT, x, &x0(0))
-LOG_ADD(LOG_FLOAT, y, &x0(1))
-LOG_ADD(LOG_FLOAT, z, &x0(2))
+LOG_ADD(LOG_FLOAT, x, &(x0(0)))
+LOG_ADD(LOG_FLOAT, y, &(x0(1)))
+LOG_ADD(LOG_FLOAT, z, &(x0(2)))
 
-LOG_ADD(LOG_FLOAT, roll,  &x0(3))
-LOG_ADD(LOG_FLOAT, pitch, &x0(4))
-LOG_ADD(LOG_FLOAT, yaw,   &x0(5))
+LOG_ADD(LOG_FLOAT, roll,  &(x0(3)))
+LOG_ADD(LOG_FLOAT, pitch, &(x0(4)))
+LOG_ADD(LOG_FLOAT, yaw,   &(x0(5)))
 
-LOG_ADD(LOG_FLOAT, vx, &x0(6))
-LOG_ADD(LOG_FLOAT, vy, &x0(7))
-LOG_ADD(LOG_FLOAT, vz, &x0(8))
+LOG_ADD(LOG_FLOAT, vx, &(x0(6)))
+LOG_ADD(LOG_FLOAT, vy, &(x0(7)))
+LOG_ADD(LOG_FLOAT, vz, &(x0(8)))
 
-LOG_ADD(LOG_FLOAT, wroll,  &x0(9))
-LOG_ADD(LOG_FLOAT, wpitch, &x0(10))
-LOG_ADD(LOG_FLOAT, wyaw,   &x0(11))
+LOG_ADD(LOG_FLOAT, wroll,  &(x0(9)))
+LOG_ADD(LOG_FLOAT, wpitch, &(x0(10)))
+LOG_ADD(LOG_FLOAT, wyaw,   &(x0(11)))
 
 LOG_ADD(LOG_INT8, result, &result)
 LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
