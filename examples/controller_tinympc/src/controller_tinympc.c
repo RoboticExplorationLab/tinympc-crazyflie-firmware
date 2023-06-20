@@ -158,6 +158,7 @@ void controllerOutOfTreeInit(void) {
   data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
     if (i < NHORIZON - 1) {
+      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
       Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
     }
     Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
@@ -213,6 +214,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
         (Xref[i]).data = &(X_ref_data[traj_idx * NSTATES]); 
+        // (Uref[i]).data = &(U_ref_data[traj_idx * NINPUTS]); 
       }
     }
   }
