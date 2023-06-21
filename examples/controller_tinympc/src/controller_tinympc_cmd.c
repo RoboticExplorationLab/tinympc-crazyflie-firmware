@@ -71,7 +71,6 @@ void appMain() {
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
-#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};

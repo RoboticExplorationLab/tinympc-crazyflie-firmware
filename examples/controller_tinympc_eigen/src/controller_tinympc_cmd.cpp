@@ -25,9 +25,7 @@
  * controller_tinympc.c - App layer application of TinyMPC.
  */
 
-/** 
- * Single lap
- */
+// 100HZ
 
 #include "Eigen.h"
 
@@ -85,12 +83,10 @@ void appMain() {
 #define DT 0.002f       // dt
 // #define NSTATES 12    // no. of states (error state)
 // #define NINPUTS 4     // no. of controls
-#define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 7   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 using namespace Eigen;
-
-#include "traj_fig8_single.h"
 
 // Precomputed data and cache
 static MatrixNf A;
@@ -138,20 +134,12 @@ static tiny_AdmmInfo info;
 static tiny_AdmmSolution soln;
 static tiny_AdmmWorkspace work;
 
-
 // Helper variables
-static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
+static uint64_t startTimestamp;
 static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
-static uint32_t step = 0;
-static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
-static int8_t user_traj_iter = 2;  // number of times to execute full trajectory
-static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
-static int8_t traj_iter = 0;
-static uint32_t traj_idx = 0;
 
 static struct vec desired_rpy;
 static struct quat attitude;
@@ -280,19 +268,12 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolution(&work, Xhrz, Uhrz, 0, YU, 0, &Kinf, d, &Pinf, p);
 
   tiny_SetInitialState(&work, &x0);  
-  // tiny_SetGoalState(&work, Xref, &xg);
-  tiny_SetStateReference(&work, Xref);
+  tiny_SetGoalState(&work, Xref, &xg);
   tiny_SetGoalInput(&work, Uref, &ug);
-
-  for (int i = 0; i < NHORIZON; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      Xref[i](j) = X_ref_data[(i)*3+j];
-    }
-  }
 
   /* Set up LQR cost */
   tiny_InitDataCost(&work, &Q, q, &R, r, r_tilde);
-  R = R + stgs.rho_init * MatrixMf::Identity();
+
   // /* Set up constraints */
   tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
   ucu.fill(1 - u_hover);
@@ -300,20 +281,14 @@ void controllerOutOfTreeInit(void) {
   tiny_UpdateLinearCost(&work);
 
   /* Solver settings */
-  // Solver settings 
-  stgs.en_cstr_goal = 0;
-  stgs.en_cstr_inputs = 1;
-  stgs.en_cstr_states = 0;
-  stgs.max_iter = 10;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
+  // isInit = true;
   /* End of MPC initialization */  
-  en_traj = true;
-  step = 0;  
-  traj_iter = 0;
 }
 
 bool controllerOutOfTreeTest() {
@@ -330,19 +305,25 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   startTimestamp = usecTimestamp();
 
-  // Update reference: 3 positions, k counts each MPC step
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < 3; ++j) {
-          Xref[i](j) = X_ref_data[(traj_idx + i)*3 + j];
-        }
-      }
-    }
-  }
-
-  // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
+  /* Get goal state (reference) */
+  xg(0)  = setpoint->position.x;
+  xg(1)  = setpoint->position.y;
+  xg(2)  = setpoint->position.z;
+  xg(6)  = setpoint->velocity.x;
+  xg(7)  = setpoint->velocity.y;
+  xg(8)  = setpoint->velocity.z;
+  xg(9)  = radians(setpoint->attitudeRate.roll);
+  xg(10) = radians(setpoint->attitudeRate.pitch);
+  xg(11) = radians(setpoint->attitudeRate.yaw);
+  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                 radians(setpoint->attitude.pitch), 
+                                 radians(setpoint->attitude.yaw));
+  struct quat attitude = rpy2quat(desired_rpy);
+  struct vec phi = quat2rp(qnormalize(attitude));  
+  xg(3) = phi.x;
+  xg(4) = phi.y;
+  xg(5) = phi.z;
+  tiny_SetGoalState(&work, Xref, &xg);
 
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -379,6 +360,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   tiny_SolveAdmm(&work);
 
   // // JUST LQR
+  // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(Kinf(0,0)), (double)(x0(1)), (double)(x0(2)));
   // Uhrz[0] = -(Kinf) * (x0 - xg);
 
   mpcTime = usecTimestamp() - startTimestamp;
@@ -398,10 +380,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = ZU_new[0](0) + u_hover;  // PWM 0..1
-    control->normalizedForces[1] = ZU_new[0](1) + u_hover;
-    control->normalizedForces[2] = ZU_new[0](2) + u_hover;
-    control->normalizedForces[3] = ZU_new[0](3) + u_hover;
+    control->normalizedForces[0] = Uhrz[0](0) + u_hover;  // PWM 0..1
+    control->normalizedForces[1] = Uhrz[0](1) + u_hover;
+    control->normalizedForces[2] = Uhrz[0](2) + u_hover;
+    control->normalizedForces[3] = Uhrz[0](3) + u_hover;
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
@@ -411,18 +393,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
-  
-  // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
-
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory, do it again
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
 }
 
 /**

@@ -26,7 +26,7 @@
  */
 
 /** 
- * Test waypoint storage
+ * Single lap
  */
 
 #include <string.h>
@@ -70,7 +70,7 @@ void appMain() {
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
-#include "traj_swerve.h"
+#include "traj_fig8_single.h"
 // #include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
@@ -126,8 +126,8 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 12;
-static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
+static int8_t user_traj_iter = 2;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
@@ -158,15 +158,19 @@ void controllerOutOfTreeInit(void) {
   data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
     if (i < NHORIZON - 1) {
-      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
       Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
     }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
+    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
+  }
+  for (int i = 0; i < NHORIZON; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
+    }
   }
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
-  slap_AddIdentity(data.R, work.rho); // \tilde{R}
+  // slap_AddIdentity(data.R, work.rho); // \tilde{R}
   tiny_InitDataLinearCostFromArray(&work, q, r, r_tilde, q_data, r_data, r_tilde_data);
 
   // Set up constraints 
@@ -213,8 +217,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        (Xref[i]).data = &(X_ref_data[traj_idx * NSTATES]); 
-        // (Uref[i]).data = &(U_ref_data[traj_idx * NINPUTS]); 
+        for (int j = 0; j < 3; ++j) {
+          Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
+        }
       }
     }
   }
@@ -278,10 +283,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
-    control->normalizedForces[1] = U[0].data[1] + u_hover;
-    control->normalizedForces[2] = U[0].data[2] + u_hover;
-    control->normalizedForces[3] = U[0].data[3] + u_hover;
+    control->normalizedForces[0] = ZU_new[0].data[0] + u_hover;  // PWM 0..1
+    control->normalizedForces[1] = ZU_new[0].data[1] + u_hover;
+    control->normalizedForces[2] = ZU_new[0].data[2] + u_hover;
+    control->normalizedForces[3] = ZU_new[0].data[3] + u_hover;
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[2]));
   // control->normalizedForces[0] = 0.0f;
