@@ -26,7 +26,7 @@
  */
 
 /** 
- * Test waypoint storage
+ * Test full state trajectory (swerving)
  */
 
 #include <string.h>
@@ -69,17 +69,9 @@ void appMain() {
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-
-#ifdef MPC_RATE == RATE_1000_HZ
-  #include "params_1000hz.h"
-#elif MPC_RATE == RATE_500_HZ
-  #include "params_500hz.h"
-  #include "traj_swerve.h"
-#elif MPC_RATE == RATE_250_HZ
-  #include "params_250hz.h"
-#elif MPC_RATE == RATE_50_HZ
-  #include "params_50hz.h"
-#endif
+#include "params_500hz.h"
+#include "traj_fig8_single.h"
+// #include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -134,7 +126,7 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 12;
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
@@ -160,17 +152,21 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
-  // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
 
-  data.Xref = Xref;
-  data.Uref = Uref;
-  for (int i = 0; i < NHORIZON; ++i) {
-    if (i < NHORIZON - 1) {
-      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
-      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
-    }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
-  }
+  // data.Xref = Xref;
+  // data.Uref = Uref;
+  // for (int i = 0; i < NHORIZON; ++i) {
+  //   if (i < NHORIZON - 1) {
+  //     Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
+  //   }
+  //   Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
+  // }
+  // for (int i = 0; i < NHORIZON; ++i) {
+  //   for (int j = 0; j < 3; ++j) {
+  //     Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
+  //   }
+  // }
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
@@ -217,22 +213,23 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   uint64_t startTimestamp = usecTimestamp();
 
   // Update reference: 3 positions, k counts each MPC step
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        (Xref[i]).data = &(X_ref_data[traj_idx * NSTATES]); 
-        // (Uref[i]).data = &(U_ref_data[traj_idx * NINPUTS]); 
-      }
-    }
-  }
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < 3; ++j) {
+  //         Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
+  //       }
+  //     }
+  //   }
+  // }
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
   x0_data[0] = state->position.x;
   x0_data[1] = state->position.y;
-  x0_data[2] = state->position.z;
+  x0_data[2] = state->position.z - 1.0f;
   // Body velocity error, [m/s]                          
   x0_data[6] = state->velocity.x;
   x0_data[7] = state->velocity.y;
@@ -300,16 +297,16 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   control->controlMode = controlModePWM;
   
   // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
+  // if (en_traj) {
+  //   if (traj_iter >= user_traj_iter) en_traj = false;
 
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory, do it again
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
+  //   if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
+  //     // complete one trajectory, do it again
+  //     step = 0; 
+  //     traj_iter += 1;
+  //   } 
+  //   else step += 1;
+  // }
 }
 
 /**

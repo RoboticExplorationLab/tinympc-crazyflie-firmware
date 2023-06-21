@@ -17,16 +17,11 @@ CRAZYFLIE_BASE := ../..
 #
 # To include header files from other directories
 #
-# EXTRA_CFLAGS += -lstdc++
-# EXTRA_CFLAGS += -lgcc
-# EXTRA_CFLAGS += -lc
-# EXTRA_CFLAGS += -lm
+
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/slap/src
-EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/ext/Eigen
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC-ADMM/src
 EXTRA_CFLAGS += -DSLAP_FLOAT=float
 EXTRA_CFLAGS += -DNDEBUG
-EXTRA_CFLAGS += -DEIGEN_NO_MALLOC
 
 #
 # We override the default OOT_CONFIG here, we could also name our config
@@ -34,6 +29,6 @@ EXTRA_CFLAGS += -DEIGEN_NO_MALLOC
 #
 OOT_CONFIG := $(PWD)/app-config
 
-OOT_USES_CXX := 1
+# OOT_USES_CXX := 1
 
 include $(CRAZYFLIE_BASE)/tools/make/oot.mk

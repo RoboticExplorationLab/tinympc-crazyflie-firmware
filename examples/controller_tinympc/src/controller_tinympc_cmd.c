@@ -26,7 +26,7 @@
  */
 
 /** 
- * Test waypoint storage
+ * Working version 
  */
 
 #include <string.h>
@@ -66,20 +66,12 @@ void appMain() {
 #define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
-#define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-
-#ifdef MPC_RATE == RATE_1000_HZ
-  #include "params_1000hz.h"
-#elif MPC_RATE == RATE_500_HZ
-  #include "params_500hz.h"
-  #include "traj_swerve.h"
-#elif MPC_RATE == RATE_250_HZ
-  #include "params_250hz.h"
-#elif MPC_RATE == RATE_50_HZ
-  #include "params_50hz.h"
-#endif
+#include "params_500hz.h"
+#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -88,7 +80,6 @@ static sfloat f_data[NSTATES] = {0};
 static sfloat x0_data[NSTATES] = {0.0f};       // initial state
 static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
 static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
-static sfloat Xref_data[NSTATES * NHORIZON] = {0};
 static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
 static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
 static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
@@ -103,8 +94,8 @@ static sfloat umax_data[NINPUTS] = {0.0f};
 static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
-static Matrix Xref[NHORIZON];
-static Matrix Uref[NHORIZON - 1];
+static Matrix Xref[NSIM];
+static Matrix Uref[NSIM - 1];
 static Matrix X[NHORIZON];
 static Matrix U[NHORIZON - 1];
 static Matrix d[NHORIZON - 1];
@@ -132,13 +123,6 @@ static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
-static uint32_t step = 0;
-static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 12;
-static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
-static int8_t traj_iter = 0;
-static uint32_t traj_idx = 0;
 
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
@@ -160,17 +144,7 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
-  // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
-
-  data.Xref = Xref;
-  data.Uref = Uref;
-  for (int i = 0; i < NHORIZON; ++i) {
-    if (i < NHORIZON - 1) {
-      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
-      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
-    }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
-  }
+  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
@@ -189,17 +163,13 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 6;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
   /* End of MPC initialization */  
-
-  en_traj = true;
-  step = 0;  
-  traj_iter = 0;
 }
 
 bool controllerOutOfTreeTest() {
@@ -216,16 +186,23 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   uint64_t startTimestamp = usecTimestamp();
 
-  // Update reference: 3 positions, k counts each MPC step
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        (Xref[i]).data = &(X_ref_data[traj_idx * NSTATES]); 
-        // (Uref[i]).data = &(U_ref_data[traj_idx * NINPUTS]); 
-      }
-    }
-  }
+  xg_data[0]  = setpoint->position.x;
+  xg_data[1]  = setpoint->position.y;
+  xg_data[2]  = setpoint->position.z;
+  xg_data[6]  = setpoint->velocity.x;
+  xg_data[7]  = setpoint->velocity.y;
+  xg_data[8]  = setpoint->velocity.z;
+  xg_data[9]  = radians(setpoint->attitudeRate.roll);
+  xg_data[10] = radians(setpoint->attitudeRate.pitch);
+  xg_data[11] = radians(setpoint->attitudeRate.yaw);
+  struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                 radians(setpoint->attitude.pitch), 
+                                 radians(setpoint->attitude.yaw));
+  struct quat attitude = rpy2quat(desired_rpy);
+  struct vec phi = quat2rp(qnormalize(attitude));  
+  xg_data[3] = phi.x;
+  xg_data[4] = phi.y;
+  xg_data[5] = phi.z;
   
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -241,12 +218,12 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x0_data[9]  = radians(sensors->gyro.x);   
   x0_data[10] = radians(sensors->gyro.y);
   x0_data[11] = radians(sensors->gyro.z);
-  struct quat attitude = mkquat(
+  attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
-  struct vec phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+  phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
   // Attitude error
   x0_data[3] = phi.x;
   x0_data[4] = phi.y;
@@ -275,7 +252,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d %d \n", step, info.status_val, info.iter, mpcTime);
+  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("%d\n", mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
@@ -298,18 +275,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
-  
-  // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
-
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory, do it again
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
 }
 
 /**
@@ -317,10 +282,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  */
 PARAM_GROUP_START(ctrlMPC)
 
-PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uHover, &u_hover)
-PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, trajLength, &traj_length)
-PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajHold, &traj_hold)
-PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajIter, &user_traj_iter)
+PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uhover, &u_hover)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
 

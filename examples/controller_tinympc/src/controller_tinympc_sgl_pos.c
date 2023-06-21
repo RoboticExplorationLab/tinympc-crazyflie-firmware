@@ -69,17 +69,9 @@ void appMain() {
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-
-#ifdef MPC_RATE == RATE_1000_HZ
-  #include "params_1000hz.h"
-#elif MPC_RATE == RATE_500_HZ
-  #include "params_500hz.h"
-  #include "traj_swerve.h"
-#elif MPC_RATE == RATE_250_HZ
-  #include "params_250hz.h"
-#elif MPC_RATE == RATE_50_HZ
-  #include "params_50hz.h"
-#endif
+#include "params_500hz.h"
+#include "traj_fig8_single.h"
+// #include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -134,7 +126,7 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 12;
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
@@ -166,10 +158,14 @@ void controllerOutOfTreeInit(void) {
   data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
     if (i < NHORIZON - 1) {
-      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
       Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
     }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
+    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
+  }
+  for (int i = 0; i < NHORIZON; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
+    }
   }
 
   // Set up LQR cost 
@@ -221,8 +217,9 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        (Xref[i]).data = &(X_ref_data[traj_idx * NSTATES]); 
-        // (Uref[i]).data = &(U_ref_data[traj_idx * NINPUTS]); 
+        for (int j = 0; j < 3; ++j) {
+          Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
+        }
       }
     }
   }
