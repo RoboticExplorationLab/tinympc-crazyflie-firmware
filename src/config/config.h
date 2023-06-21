@@ -62,6 +62,48 @@
 #define portGET_RUN_TIME_COUNTER_VALUE() usecTimestamp()
 
 
+// // Task priorities. Higher number higher priority
+// #define PASSTHROUGH_TASK_PRI    4
+// #define STABILIZER_TASK_PRI     4
+// #define SENSORS_TASK_PRI        3
+// #define ADC_TASK_PRI            2
+// #define FLOW_TASK_PRI           2
+// #define MULTIRANGER_TASK_PRI    2
+// #define SYSTEM_TASK_PRI         1
+// #define CRTP_TX_TASK_PRI        1
+// #define CRTP_RX_TASK_PRI        1
+// #define EXTRX_TASK_PRI          1
+// #define ZRANGER_TASK_PRI        1
+// #define ZRANGER2_TASK_PRI       1
+// #define LOG_TASK_PRI            0
+// #define MEM_TASK_PRI            0
+// #define PARAM_TASK_PRI          0
+// #define PROXIMITY_TASK_PRI      0
+// #define PM_TASK_PRI             0
+// #define USDLOG_TASK_PRI         0
+// #define USDWRITE_TASK_PRI       0
+// #define PCA9685_TASK_PRI        1
+// #define CMD_HIGH_LEVEL_TASK_PRI 1
+// #define BQ_OSD_TASK_PRI         0
+// #define GTGPS_DECK_TASK_PRI     0
+// #define LIGHTHOUSE_TASK_PRI     2
+// #define LPS_DECK_TASK_PRI       2
+// #define OA_DECK_TASK_PRI        2
+// #define UART1_TEST_TASK_PRI     0
+// #define UART2_TEST_TASK_PRI     0
+// #define KALMAN_TASK_PRI         1
+// #define TINYMPC_TASK_PRI        5
+// #define ERROR_UKF_TASK_PRI      1
+// #define LEDSEQCMD_TASK_PRI      0
+// #define FLAPPERDECK_TASK_PRI    1
+// #define SYSLINK_TASK_PRI        2
+// #define USBLINK_TASK_PRI        2
+// #define ACTIVE_MARKER_TASK_PRI  2
+// #define AI_DECK_TASK_PRI        0
+// #define UART2_TASK_PRI          2
+// #define CRTP_SRV_TASK_PRI       0
+// #define PLATFORM_SRV_TASK_PRI   0
+
 // Task priorities. Higher number higher priority
 #define PASSTHROUGH_TASK_PRI    5
 #define STABILIZER_TASK_PRI     5
@@ -92,7 +134,7 @@
 #define UART1_TEST_TASK_PRI     1
 #define UART2_TEST_TASK_PRI     1
 #define KALMAN_TASK_PRI         2
-#define TINYMPC_TASK_PRI        2
+#define TINYMPC_TASK_PRI        5
 #define ERROR_UKF_TASK_PRI      2
 #define LEDSEQCMD_TASK_PRI      1
 #define FLAPPERDECK_TASK_PRI    2

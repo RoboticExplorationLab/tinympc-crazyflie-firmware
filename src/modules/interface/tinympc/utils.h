@@ -8,7 +8,6 @@ extern "C" {
 
 #include "types.h"
 #include "constants.h"
-#include "slap/slap.h"
 
 // void PrintLine(void);
 

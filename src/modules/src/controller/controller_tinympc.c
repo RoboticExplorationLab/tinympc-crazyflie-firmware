@@ -57,12 +57,12 @@ static StaticSemaphore_t dataMutexBuffer;
 
 
 // Macro variables
-#define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 3   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_500_HZ  // control frequency
+#define DT 1/MPC_RATE       // dt
 
 #if MPC_RATE == RATE_50_HZ
   #include "tinympc/data/params_50hz.h"
@@ -71,6 +71,8 @@ static StaticSemaphore_t dataMutexBuffer;
 #elif MPC_RATE == RATE_500_HZ
   #include "tinympc/data/params_500hz.h"
 #endif
+
+#include "tinympc/data/traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -135,13 +137,11 @@ control_t control_task;
 
 // Helper variables
 static bool isInit = false;  // fix for tracking problem
-static uint32_t mpcTime = 0;
-static float u_hover = 0.67f;
-static int8_t result = 0;
+static float u_hover = 0.7f;
 
 static void tinympcControllerTask(void* parameters);
 
-STATIC_MEM_TASK_ALLOC(tinympcTask, TINYMPC_TASK_STACKSIZE);
+STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 void controllerTinyMPCInit(void)
 {
@@ -187,11 +187,11 @@ void controllerTinyMPCInit(void)
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 8;           // limit this if needed
+  stgs.max_iter = 2;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
-  stgs.tol_abs_dual = 1e-2;
-  stgs.tol_abs_prim = 1e-2;
+  stgs.tol_abs_dual = 5e-2;
+  stgs.tol_abs_prim = 5e-2;
 
   /* End of MPC initialization */  
 
@@ -203,7 +203,7 @@ void controllerTinyMPCInit(void)
 
   dataMutex = xSemaphoreCreateMutexStatic(&dataMutexBuffer);
 
-  STATIC_MEM_TASK_CREATE(tinympcTask, tinympcControllerTask, TINYMPC_TASK_NAME, NULL, TINYMPC_TASK_PRI);
+  STATIC_MEM_TASK_CREATE(tinympcControllerTask, tinympcControllerTask, TINYMPC_TASK_NAME, NULL, TINYMPC_TASK_PRI);
 
   isInit = true;
 
@@ -238,6 +238,8 @@ static void tinympcControllerTask(void* parameters) {
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextPredictionMs = nowMs;
 
+  uint64_t startTimestamp = usecTimestamp();
+
   while (true) {
     // Update task data with most recent stabilizer loop data
     xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -250,14 +252,12 @@ static void tinympcControllerTask(void* parameters) {
     xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
     nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
     
-    // // Get current time
-    uint64_t startTimestamp = usecTimestamp();
+    // Get current time
 
     /* Controller rate */
     if (nowMs >= nextPredictionMs) {
-      nextPredictionMs = nowMs + (1000.0f / 50);
+      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
 
-      // /* Get goal state_task (reference) */
       xg_data[0]  = setpoint_task.position.x;
       xg_data[1]  = setpoint_task.position.y;
       xg_data[2]  = setpoint_task.position.z;
@@ -276,7 +276,7 @@ static void tinympcControllerTask(void* parameters) {
       xg_data[4] = phi.y;
       xg_data[5] = phi.z;
       
-      /* Get current state_task (initial state_task for MPC) */
+      /* Get current state (initial state for MPC) */
       // delta_x = x - x_bar; x_bar = 0
       // Positon error, [m]
       x0_data[0] = state_task.position.x;
@@ -302,21 +302,18 @@ static void tinympcControllerTask(void* parameters) {
       x0_data[5] = phi.z;
 
       /* MPC solve */
-      // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
-      // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
-
-
-      // Solve optimization problem using ADMM
-      DEBUG_PRINT("running ADMM\n");
-      tiny_UpdateLinearCost(&work);
-      tiny_SolveAdmm(&work);
+      // startTimestamp = usecTimestamp();
+      // tiny_UpdateLinearCost(&work);
+      // tiny_SolveAdmm(&work);
+      // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, usecTimestamp() - startTimestamp);
       /* MPC solve end */
 
+      // Print solve info
 
-      /* LQR solve */
-      // MatAdd(data.x0, data.x0, Xref[0], -1);
-      // MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
-      /* LQR solve end */
+      // /* LQR solve */
+      MatAdd(data.x0, data.x0, Xref[0], -1);
+      MatMulAdd(U[0], soln.Kinf, data.x0, -1, 0);
+      // /* LQR solve end */
 
       // mpcTime = usecTimestamp() - startTimestamp;
 
@@ -331,27 +328,33 @@ static void tinympcControllerTask(void* parameters) {
       // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
       // DEBUG_PRINT("%d\n", mpcTime);
       // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
-    }
 
-    /* Output control_task */
-    if (setpoint_task.mode.z == modeDisable) {
-      control_task.normalizedForces[0] = 0.0f;
-      control_task.normalizedForces[1] = 0.0f;
-      control_task.normalizedForces[2] = 0.0f;
-      control_task.normalizedForces[3] = 0.0f;
-    } else {
-      control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
-      control_task.normalizedForces[1] = U[0].data[1] + u_hover;
-      control_task.normalizedForces[2] = U[0].data[2] + u_hover;
-      control_task.normalizedForces[3] = U[0].data[3] + u_hover;
-    }
 
-    control_task.controlMode = controlModePWM;
+      /* Output control_task */
+      if (setpoint_task.mode.z == modeDisable) {
+        control_task.normalizedForces[0] = 0.0f;
+        control_task.normalizedForces[1] = 0.0f;
+        control_task.normalizedForces[2] = 0.0f;
+        control_task.normalizedForces[3] = 0.0f;
+      } else {
+        control_task.normalizedForces[0] = U[0].data[0] + u_hover;  // PWM 0..1
+        control_task.normalizedForces[1] = U[0].data[1] + u_hover;
+        control_task.normalizedForces[2] = U[0].data[2] + u_hover;
+        control_task.normalizedForces[3] = U[0].data[3] + u_hover;
+      }
+
+      DEBUG_PRINT("control: %.2f\n", (double)control_data.normalizedForces[0]);
+
+      control_task.controlMode = controlModePWM;
+
+    }
+    
     
     // Copy the controls calculated by the task loop to the global control_data
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     memcpy(&control_data, &control_task, sizeof(control_t));
     xSemaphoreGive(dataMutex);
+
 
   }
 }

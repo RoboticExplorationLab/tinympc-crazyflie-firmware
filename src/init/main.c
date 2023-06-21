@@ -44,7 +44,7 @@
 
 #include "bootloader.h"
 
-int main() 
+int main()
 {
   check_enter_bootloader();
 

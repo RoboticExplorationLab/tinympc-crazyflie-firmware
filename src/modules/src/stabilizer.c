@@ -199,8 +199,6 @@ bool stabilizerTest(void)
   pass &= controllerTest();
   pass &= powerDistributionTest();
   pass &= motorsTest();
-  // pass &= collisionAvoidanceTest();
-
   return pass;
 }
 
@@ -263,15 +261,22 @@ static void stabilizerTask(void* param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  uint64_t startTimestamp = usecTimestamp();
+  uint64_t prevTimestamp = startTimestamp;
+  uint64_t rtosPrintTimestamp = startTimestamp;
+
+  bool rtosPrintTimerStarted = false;
+  bool rtosDataPrinted = false;
+
+  signed char rtosData[2048];
+  
   while(1) {
-    // nowMs = T2M(xTaskGetTickCount());
-    // if (nowMs >= nextPrintMs) {
-    //   DEBUG_PRINT("running stabilizerTask\n");
-    //   nextPrintMs = nowMs + (1000.0f / 10);
-    // }
+    // DEBUG_PRINT("time: %f\n", startTimestamp - prevTimestamp);
+    
 
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
+    startTimestamp = usecTimestamp();
 
     // update sensorData struct (for logging variables)
     sensorsAcquire(&sensorData, tick);
@@ -304,9 +309,22 @@ static void stabilizerTask(void* param)
 
       controller(&control, &setpoint, &sensorData, &state, tick);
 
-      if ( (controllerType == ControllerTypeTinyMPC) && (tick % 100 == 0) ) {
-        DEBUG_PRINT("control: %.2f\n", (double)control.normalizedForces[0]);
-      }
+      // if ( (controllerType == ControllerTypeTinyMPC) && (tick % 100 == 0) ) {
+      //   DEBUG_PRINT("control: %.2f\n", (double)control.normalizedForces[0]);
+      // }
+
+      // if (controllerType == ControllerTypeTinyMPC) {
+      //   // Start task print out timer:
+      //   if (rtosPrintTimerStarted == false) {
+      //     rtosPrintTimerStarted = true;
+      //     rtosPrintTimestamp = usecTimestamp();
+      //   }
+      //   else if ( !rtosDataPrinted && (usecTimestamp() - rtosPrintTimestamp >= 5000000) ) {  // 5 second timer
+      //     rtosDataPrinted = true;
+      //     vTaskGetRunTimeStats(rtosData);
+      //     DEBUG_PRINT("%s\n", rtosData);
+      //   }
+      // }
 
       checkEmergencyStopTimeout();
 
@@ -347,6 +365,13 @@ static void stabilizerTask(void* param)
 #ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
     motorsBurstDshot();
 #endif
+    // DEBUG_PRINT("stab time: %f\n", usecTimestamp() - startTimestamp);
+
+    // nowMs = T2M(xTaskGetTickCount());
+    // if (nowMs >= nextPrintMs) {
+    //   DEBUG_PRINT("time: %f\n", (double)(usecTimestamp() - startTimestamp));
+    //   nextPrintMs = nowMs + (1000.0f / 100);
+    // }
   }
 }
 

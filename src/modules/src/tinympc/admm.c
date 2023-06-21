@@ -1,5 +1,8 @@
 #include "admm.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 enum tiny_ErrorCode tiny_SolveAdmm(tiny_AdmmWorkspace* work) {
 
   tiny_ResetInfo(work);
@@ -76,6 +79,8 @@ enum tiny_ErrorCode tiny_SolveAdmm(tiny_AdmmWorkspace* work) {
     }
     
   } // End of ADMM `for` loop
+
+  vTaskDelay(M2T(1));
 
   /* if max iterations reached, change status accordingly */
   if (work->info->status_val == TINY_UNSOLVED) {

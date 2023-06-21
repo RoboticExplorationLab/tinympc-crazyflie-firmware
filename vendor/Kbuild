@@ -278,6 +278,7 @@ obj-y += FreeRTOS/portable/GCC/ARM_CM4F/port.o
 obj-y += FreeRTOS/portable/MemMang/heap_4.o
 obj-y += FreeRTOS/queue.o
 obj-y += FreeRTOS/tasks.o
+obj-y += FreeRTOS/printf-stdarg.o
 obj-y += FreeRTOS/timers.o
 obj-y += FreeRTOS/stream_buffer.o
 
