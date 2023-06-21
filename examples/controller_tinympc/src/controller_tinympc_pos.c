@@ -190,7 +190,7 @@ void controllerOutOfTreeInit(void) {
 
   /* End of MPC initialization */  
   step = 0;
-  en_traj = true;
+  en_traj = false;
 }
 
 bool controllerOutOfTreeTest() {
@@ -216,25 +216,27 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
       }
     }
   }
-  // DEBUG_PRINT("Xref = [%.2f]\n", (double)(Xref[0].data[0]));
-  // xg_data[0]  = setpoint->position.x;
-  // xg_data[1]  = setpoint->position.y;
-  // xg_data[2]  = setpoint->position.z;
-  // xg_data[6]  = setpoint->velocity.x;
-  // xg_data[7]  = setpoint->velocity.y;
-  // xg_data[8]  = setpoint->velocity.z;
-  // xg_data[9]  = radians(setpoint->attitudeRate.roll);
-  // xg_data[10] = radians(setpoint->attitudeRate.pitch);
-  // xg_data[11] = radians(setpoint->attitudeRate.yaw);
-  // struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-  //                                radians(setpoint->attitude.pitch), 
-  //                                radians(setpoint->attitude.yaw));
-  // struct quat attitude = rpy2quat(desired_rpy);
-  // struct vec phi = quat2rp(qnormalize(attitude));  
-  // xg_data[3] = phi.x;
-  // xg_data[4] = phi.y;
-  // xg_data[5] = phi.z;
-  
+  else {
+    // DEBUG_PRINT("Xref = [%.2f]\n", (double)(Xref[0].data[0]));
+    xg_data[0]  = setpoint->position.x;
+    xg_data[1]  = setpoint->position.y;
+    xg_data[2]  = setpoint->position.z;
+    xg_data[6]  = setpoint->velocity.x;
+    xg_data[7]  = setpoint->velocity.y;
+    xg_data[8]  = setpoint->velocity.z;
+    xg_data[9]  = radians(setpoint->attitudeRate.roll);
+    xg_data[10] = radians(setpoint->attitudeRate.pitch);
+    xg_data[11] = radians(setpoint->attitudeRate.yaw);
+    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                  radians(setpoint->attitude.pitch), 
+                                  radians(setpoint->attitude.yaw));
+    struct quat attitude = rpy2quat(desired_rpy);
+    struct vec phi = quat2rp(qnormalize(attitude));  
+    xg_data[3] = phi.x;
+    xg_data[4] = phi.y;
+    xg_data[5] = phi.z;
+  }
+
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
@@ -324,6 +326,7 @@ PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, trajLength, &traj_length)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajHold, &traj_hold)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
+PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, enableTraj, &en_traj)
 
 PARAM_GROUP_STOP(ctrlMPC)
 

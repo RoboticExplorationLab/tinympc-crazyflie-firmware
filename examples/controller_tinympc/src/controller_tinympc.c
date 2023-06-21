@@ -69,17 +69,8 @@ void appMain() {
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-
-#ifdef MPC_RATE == RATE_1000_HZ
-  #include "params_1000hz.h"
-#elif MPC_RATE == RATE_500_HZ
-  #include "params_500hz.h"
-  #include "traj_swerve.h"
-#elif MPC_RATE == RATE_250_HZ
-  #include "params_250hz.h"
-#elif MPC_RATE == RATE_50_HZ
-  #include "params_50hz.h"
-#endif
+#include "params_500hz.h"
+#include "traj_swerve.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
