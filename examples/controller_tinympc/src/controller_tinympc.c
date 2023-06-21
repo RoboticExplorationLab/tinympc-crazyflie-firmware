@@ -74,7 +74,16 @@ void appMain() {
 #define NSIM NHORIZON      // length of reference trajectory
 #define MPC_RATE RATE_500_HZ  // control frequency
 
-#include "params_500hz.h"
+
+#ifdef MPC_RATE == RATE_1000_HZ
+  #include "params_1000hz.h"
+#elif MPC_RATE == RATE_500_HZ
+  #include "params_500hz.h"
+#elif MPC_RATE == RATE_250_HZ
+  #include "params_250hz.h"
+#elif MPC_RATE == RATE_50_HZ
+  #include "params_50hz.h"
+#endif
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
