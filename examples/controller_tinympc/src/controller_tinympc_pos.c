@@ -159,11 +159,6 @@ void controllerOutOfTreeInit(void) {
     }
     Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
   }
-  for (int i = 0; i < NHORIZON; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
-    }
-  }
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);

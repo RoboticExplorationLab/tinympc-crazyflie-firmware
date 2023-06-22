@@ -65,14 +65,14 @@ void appMain() {
 // Macro variables
 #define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
-#define NREF 3        // no. of states in references
+#define NREF 12        // no. of states in references
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
-#include "traj_fig8_single.h"
-// #include "traj_fig8.h"
+// #include "traj_fig8_single.h"
+#include "traj_fig8_12.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -127,8 +127,8 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
-static int8_t user_traj_iter = 2;  // number of times to execute full trajectory
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NREF;
+static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
@@ -153,21 +153,22 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
-  // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
-
+  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+  tiny_SetInputReference()
   data.Xref = Xref;
   data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
     if (i < NHORIZON - 1) {
-      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
+      // Uref[i] = slap_MatrixFromArray(NINPUTS, 1, ug_data);
+      Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
     }
-    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &Xref_data[i * NSTATES]);
+    Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
   }
-  for (int i = 0; i < NHORIZON; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      Xref_data[i*NSTATES + j] = X_ref_data[(i)*3+j];
-    }
-  }
+  // for (int i = 0; i < NHORIZON; ++i) {
+  //   for (int j = 0; j < NREF; ++j) {
+  //     Xref_data[i*NSTATES + j] = X_ref_data[(i)*NREF+j];
+  //   }
+  // }
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
@@ -213,18 +214,44 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   uint64_t startTimestamp = usecTimestamp();
 
-  // Update reference: 3 positions, k counts each MPC step
+  // Update reference: from stored trajectory or commander
   if (en_traj) {
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < 3; ++j) {
-          Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
+        // for (int j = 0; j < NREF; ++j) {
+        //   Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*NREF+j];
+        // }
+        (Xref[i]).data = &(X_ref_data[(traj_idx + i)*NSTATES]);
+        if (i < NHORIZON - 1) {
+          (Uref[i]).data = &(U_ref_data[(traj_idx + i)*NINPUTS]);
         }
       }
     }
   }
-  
+  else {
+    tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+
+    xg_data[0]  = setpoint->position.x;
+    xg_data[1]  = setpoint->position.y;
+    xg_data[2]  = setpoint->position.z;
+    xg_data[6]  = setpoint->velocity.x;
+    xg_data[7]  = setpoint->velocity.y;
+    xg_data[8]  = setpoint->velocity.z;
+    xg_data[9]  = radians(setpoint->attitudeRate.roll);
+    xg_data[10] = radians(setpoint->attitudeRate.pitch);
+    xg_data[11] = radians(setpoint->attitudeRate.yaw);
+    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                  radians(setpoint->attitude.pitch), 
+                                  radians(setpoint->attitude.yaw));
+    struct quat attitude = rpy2quat(desired_rpy);
+    struct vec phi = quat2rp(qnormalize(attitude));  
+    xg_data[3] = phi.x;
+    xg_data[4] = phi.y;
+    xg_data[5] = phi.z;
+  }
+  // DEBUG_PRINT("x_ref = %.2f\n", (double)((Xref[0].data)[0]));
+
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
