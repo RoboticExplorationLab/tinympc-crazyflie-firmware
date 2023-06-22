@@ -16,11 +16,12 @@
 
 #include "errors.h"
 
-#ifdef SLAP_FLOAT
-typedef SLAP_FLOAT sfloat;
-#else
-typedef double sfloat;
-#endif
+// #ifdef SLAP_FLOAT
+// typedef SLAP_FLOAT sfloat;
+// #else
+// typedef double sfloat;
+// #endif
+typedef int32_t sfloat; // For fixed-point
 
 enum slap_MatrixType {
   slap_DENSE,

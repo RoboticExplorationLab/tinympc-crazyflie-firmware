@@ -1,7 +1,0 @@
-obj-y += utils.o
-obj-y += model.o
-obj-y += auxil.o
-obj-y += cost_lqr.o
-obj-y += lqr.o
-obj-y += constraint_linear.o
-obj-y += admm.o
