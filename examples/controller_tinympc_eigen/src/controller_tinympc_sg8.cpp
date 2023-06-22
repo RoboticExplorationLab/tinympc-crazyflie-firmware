@@ -90,7 +90,7 @@ void appMain() {
 
 using namespace Eigen;
 
-#include "traj_fig8_12.h"
+#include "traj_fig8_single.h"
 
 // Precomputed data and cache
 static MatrixNf A;
@@ -127,7 +127,7 @@ static VectorMf ZU[NHORIZON-1];
 static VectorMf ZU_new[NHORIZON-1];
 
 static VectorNf x0;
-static VectorNf xg = (VectorNf() << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0).finished();
+static VectorNf xg = (VectorNf() << 0, 0, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0).finished();
 static VectorMf ug = (VectorMf() << 0, 0, 0, 0).finished();
 
 // Create TinyMPC struct
@@ -147,8 +147,8 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
-static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
+static int8_t user_traj_iter = 2;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
@@ -282,12 +282,17 @@ void controllerOutOfTreeInit(void) {
   tiny_SetInitialState(&work, &x0);  
   // tiny_SetGoalState(&work, Xref, &xg);
   tiny_SetStateReference(&work, Xref);
-  // tiny_SetInputReference(&work, Uref);
   tiny_SetGoalInput(&work, Uref, &ug);
+
+  for (int i = 0; i < NHORIZON; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      Xref[i](j) = X_ref_data[(i)*3+j];
+    }
+  }
 
   /* Set up LQR cost */
   tiny_InitDataCost(&work, &Q, q, &R, r, r_tilde);
-  // R = R + stgs.rho_init * MatrixMf::Identity();
+  R = R + stgs.rho_init * MatrixMf::Identity();
   // /* Set up constraints */
   tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
   ucu.fill(1 - u_hover);
@@ -325,43 +330,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Get current time
   startTimestamp = usecTimestamp();
 
-  // Update reference: from stored trajectory or commander
+  // Update reference: 3 positions, k counts each MPC step
   if (en_traj) {
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[(traj_idx + i)*NSTATES + j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[(traj_idx + i)*NINPUTS + j];
-          }          
+        for (int j = 0; j < 3; ++j) {
+          Xref[i](j) = X_ref_data[(traj_idx + i)*3 + j];
         }
       }
     }
   }
-  else {
-    xg(0)  = setpoint->position.x;
-    xg(1)  = setpoint->position.y;
-    xg(2)  = setpoint->position.z;
-    xg(6)  = setpoint->velocity.x;
-    xg(7)  = setpoint->velocity.y;
-    xg(8)  = setpoint->velocity.z;
-    xg(9)  = radians(setpoint->attitudeRate.roll);
-    xg(10) = radians(setpoint->attitudeRate.pitch);
-    xg(11) = radians(setpoint->attitudeRate.yaw);
-    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-                                  radians(setpoint->attitude.pitch), 
-                                  radians(setpoint->attitude.yaw));
-    struct quat attitude = rpy2quat(desired_rpy);
-    struct vec phi = quat2rp(qnormalize(attitude));  
-    xg(3) = phi.x;
-    xg(4) = phi.y;
-    xg(5) = phi.z;
-    tiny_SetGoalState(&work, Xref, &xg);
-    tiny_SetGoalInput(&work, Uref, &ug);
-  }
+
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   /* Get current state (initial state for MPC) */
