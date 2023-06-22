@@ -17,9 +17,9 @@
 #include "errors.h"
 
 #ifdef SLAP_FLOAT
-typedef SLAP_FLOAT float;
+typedef SLAP_FLOAT sfloat;
 #else
-typedef double float;
+typedef double sfloat;
 #endif
 
 enum slap_MatrixType {

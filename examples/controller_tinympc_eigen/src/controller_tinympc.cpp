@@ -327,68 +327,70 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   startTimestamp = usecTimestamp();
 
   // Update reference: from stored trajectory or commander
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[(traj_idx + i)*NSTATES + j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[(traj_idx + i)*NINPUTS + j];
-          }          
-        }
-      }
-    }
-  }
-  else {
-    xg(0)  = setpoint->position.x;
-    xg(1)  = setpoint->position.y;
-    xg(2)  = setpoint->position.z;
-    xg(6)  = setpoint->velocity.x;
-    xg(7)  = setpoint->velocity.y;
-    xg(8)  = setpoint->velocity.z;
-    xg(9)  = radians(setpoint->attitudeRate.roll);
-    xg(10) = radians(setpoint->attitudeRate.pitch);
-    xg(11) = radians(setpoint->attitudeRate.yaw);
-    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
-                                  radians(setpoint->attitude.pitch), 
-                                  radians(setpoint->attitude.yaw));
-    struct quat attitude = rpy2quat(desired_rpy);
-    struct vec phi = quat2rp(qnormalize(attitude));  
-    xg(3) = phi.x;
-    xg(4) = phi.y;
-    xg(5) = phi.z;
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < NSTATES; ++j) {
+  //         Xref[i](j) = X_ref_data[(traj_idx + i)*NSTATES + j];
+  //       }
+  //       // if (i < NHORIZON - 1) {
+  //       //   for (int j = 0; j < NINPUTS; ++j) {
+  //       //     Uref[i](j) = U_ref_data[(traj_idx + i)*NINPUTS + j];
+  //       //   }          
+  //       // }
+  //     }
+  //   }
+  // }
+  // else {
+  //   xg(0)  = setpoint->position.x;
+  //   xg(1)  = setpoint->position.y;
+  //   xg(2)  = setpoint->position.z;
+  //   xg(6)  = setpoint->velocity.x;
+  //   xg(7)  = setpoint->velocity.y;
+  //   xg(8)  = setpoint->velocity.z;
+  //   xg(9)  = radians(setpoint->attitudeRate.roll);
+  //   xg(10) = radians(setpoint->attitudeRate.pitch);
+  //   xg(11) = radians(setpoint->attitudeRate.yaw);
+  //   desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+  //                                 radians(setpoint->attitude.pitch), 
+  //                                 radians(setpoint->attitude.yaw));
+  //   attitude = rpy2quat(desired_rpy);
+  //   phi = quat2rp(qnormalize(attitude));  
+  //   xg(3) = phi.x;
+  //   xg(4) = phi.y;
+  //   xg(5) = phi.z;
     tiny_SetGoalState(&work, Xref, &xg);
     tiny_SetGoalInput(&work, Uref, &ug);
-  }
+    xg(1) = 1.0;
+    xg(2) = 2.0;
+  // }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
-  x0(0) = state->position.x;
-  x0(1) = state->position.y;
-  x0(2) = state->position.z;
-  // Body velocity error, [m/s]                          
-  x0(6) = state->velocity.x;
-  x0(7) = state->velocity.y;
-  x0(8) = state->velocity.z;
-  // Angular rate error, [rad/s]
-  x0(9)  = radians(sensors->gyro.x);   
-  x0(10) = radians(sensors->gyro.y);
-  x0(11) = radians(sensors->gyro.z);
-  attitude = mkquat(
-    state->attitudeQuaternion.x,
-    state->attitudeQuaternion.y,
-    state->attitudeQuaternion.z,
-    state->attitudeQuaternion.w);  // current attitude
-  phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
-  // Attitude error
-  x0(3) = phi.x;
-  x0(4) = phi.y;
-  x0(5) = phi.z;
+  // x0(0) = state->position.x;
+  // x0(1) = state->position.y;
+  // x0(2) = state->position.z;
+  // // Body velocity error, [m/s]                          
+  // x0(6) = state->velocity.x;
+  // x0(7) = state->velocity.y;
+  // x0(8) = state->velocity.z;
+  // // Angular rate error, [rad/s]
+  // x0(9)  = radians(sensors->gyro.x);   
+  // x0(10) = radians(sensors->gyro.y);
+  // x0(11) = radians(sensors->gyro.z);
+  // attitude = mkquat(
+  //   state->attitudeQuaternion.x,
+  //   state->attitudeQuaternion.y,
+  //   state->attitudeQuaternion.z,
+  //   state->attitudeQuaternion.w);  // current attitude
+  // phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+  // // Attitude error
+  // x0(3) = phi.x;
+  // x0(4) = phi.y;
+  // x0(5) = phi.z;
 
   /* MPC solve */
   
@@ -403,8 +405,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // Uhrz[0] = -(Kinf) * (x0 - xg);
 
   mpcTime = usecTimestamp() - startTimestamp;
-// 
-  // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
+ 
+  DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
   // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
@@ -426,24 +428,24 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  control->normalizedForces[0] = 0.0f;
+  control->normalizedForces[1] = 0.0f;
+  control->normalizedForces[2] = 0.0f;
+  control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
   
   // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
+  // if (en_traj) {
+  //   if (traj_iter >= user_traj_iter) en_traj = false;
 
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory, do it again
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
+  //   if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
+  //     // complete one trajectory, do it again
+  //     step = 0; 
+  //     traj_iter += 1;
+  //   } 
+  //   else step += 1;
+  // }
 }
 
 /**

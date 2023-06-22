@@ -131,6 +131,10 @@ static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 
+struct vec desired_rpy;
+struct quat attitude;
+struct vec phi;
+
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
   
@@ -160,6 +164,7 @@ void controllerOutOfTreeInit(void) {
       Uref[i] = slap_MatrixFromArray(NINPUTS, 1, &U_ref_data[i * NINPUTS]);
     }
     Xref[i] = slap_MatrixFromArray(NSTATES, 1, &X_ref_data[i * NSTATES]);
+    // Xref[i] = slap_MatrixFromArray(NSTATES, 1, xg_data);
   }
   // for (int i = 0; i < NHORIZON; ++i) {
   //   for (int j = 0; j < NREF; ++j) {
@@ -228,6 +233,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   }
   else {
     tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+    // xg_data[1] = 1.0f;
+    // xg_data[2] = 2.0f;
 
     xg_data[0]  = setpoint->position.x;
     xg_data[1]  = setpoint->position.y;
@@ -238,11 +245,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     xg_data[9]  = radians(setpoint->attitudeRate.roll);
     xg_data[10] = radians(setpoint->attitudeRate.pitch);
     xg_data[11] = radians(setpoint->attitudeRate.yaw);
-    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+    desired_rpy = mkvec(radians(setpoint->attitude.roll), 
                                   radians(setpoint->attitude.pitch), 
                                   radians(setpoint->attitude.yaw));
-    struct quat attitude = rpy2quat(desired_rpy);
-    struct vec phi = quat2rp(qnormalize(attitude));  
+    attitude = rpy2quat(desired_rpy);
+    phi = quat2rp(qnormalize(attitude));  
     xg_data[3] = phi.x;
     xg_data[4] = phi.y;
     xg_data[5] = phi.z;
@@ -263,12 +270,12 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x0_data[9]  = radians(sensors->gyro.x);   
   x0_data[10] = radians(sensors->gyro.y);
   x0_data[11] = radians(sensors->gyro.z);
-  struct quat attitude = mkquat(
+  attitude = mkquat(
     state->attitudeQuaternion.x,
     state->attitudeQuaternion.y,
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
-  struct vec phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+  phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
   // Attitude error
   x0_data[3] = phi.x;
   x0_data[4] = phi.y;
@@ -321,7 +328,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   control->controlMode = controlModePWM;
   
-  // stop trajectory executation
+  //// stop trajectory executation
   if (en_traj) {
     if (traj_iter >= user_traj_iter) en_traj = false;
 
