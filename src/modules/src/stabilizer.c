@@ -240,6 +240,8 @@ static void setMotorRatios(const motors_thrust_pwm_t* motorPwm)
 static void stabilizerTask(void* param)
 {
   uint32_t tick;
+  uint32_t nextPrintTick1;
+  uint32_t nextPrintTick2;
   uint32_t lastWakeTime;
   vTaskSetApplicationTaskTag(0, (void*)TASK_STABILIZER_ID_NBR);
 
@@ -255,8 +257,10 @@ static void stabilizerTask(void* param)
   }
   // Initialize tick to something else then 0
   tick = 1;
+  nextPrintTick1 = 1;
+  nextPrintTick2 = 1;
 
-  rateSupervisorInit(&rateSupervisorContext, xTaskGetTickCount(), M2T(1000), 997, 1003, 1);
+  rateSupervisorInit(&rateSupervisorContext, xTaskGetTickCount(), M2T(RATE_MAIN_LOOP), RATE_MAIN_LOOP - 3, RATE_MAIN_LOOP + 3, 1);
 
   DEBUG_PRINT("Ready to fly.\n");
 
@@ -265,87 +269,97 @@ static void stabilizerTask(void* param)
   uint64_t prevTime = 0;
 
   while(1) {
-    // The sensor should unlock at 1kHz
+
+    // The sensor should unlock at 1kHz. This function defines the 1000 ticks per second rule used in stabilizer_types.h
     sensorsWaitDataReady();
 
-    startTime = usecTimestamp();
-    DEBUG_PRINT("time between: %d\n", (startTime - prevTime));
-    prevTime = startTime;
+    if (RATE_DO_EXECUTE(RATE_MAIN_LOOP, tick)) {
 
-    // update sensorData struct (for logging variables)
-    sensorsAcquire(&sensorData, tick);
-
-    if (healthShallWeRunTest()) {
-      healthRunTests(&sensorData);
-    } else {
-      // allow to update estimator dynamically
-      if (stateEstimatorGetType() != estimatorType) {
-        stateEstimatorSwitchTo(estimatorType);
-        estimatorType = stateEstimatorGetType();
+      startTime = usecTimestamp();
+      if (tick - 50 >= nextPrintTick1) {
+        DEBUG_PRINT("time between: %d\n", (startTime - endTime));
+        nextPrintTick1 += 100;
       }
-      // allow to update controller dynamically
-      if (controllerGetType() != controllerType) {
-        controllerInit(controllerType);
-        controllerType = controllerGetType();
-      }
+      // prevTime = startTime;
 
-      stateEstimator(&state, tick);
-      compressState();
-
-      if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
-        commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
-      }
-
-      commanderGetSetpoint(&setpoint, &state);
-      compressSetpoint();
-
-      // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
-
-      controller(&control, &setpoint, &sensorData, &state, tick);
-
-      checkEmergencyStopTimeout();
-
-      //
-      // The supervisor module keeps track of Crazyflie state such as if
-      // we are ok to fly, or if the Crazyflie is in flight.
-      //
-      supervisorUpdate(&sensorData);
-
-      if (emergencyStop || (systemIsArmed() == false)) {
-        motorsStop();
+      // update sensorData struct (for logging variables)
+      sensorsAcquire(&sensorData, tick);
+      
+      if (healthShallWeRunTest()) {
+        healthRunTests(&sensorData);
       } else {
-        powerDistribution(&control, &motorThrustUncapped);
-        batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
-        powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
-        setMotorRatios(&motorPwm);
-      }
+        // allow to update estimator dynamically
+        if (stateEstimatorGetType() != estimatorType) {
+          stateEstimatorSwitchTo(estimatorType);
+          estimatorType = stateEstimatorGetType();
+        }
+        // allow to update controller dynamically
+        if (controllerGetType() != controllerType) {
+          controllerInit(controllerType);
+          controllerType = controllerGetType();
+        }
 
-#ifdef CONFIG_DECK_USD
-      // Log data to uSD card if configured
-      if (usddeckLoggingEnabled()
-          && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
-          && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
-        usddeckTriggerLogging();
-      }
-#endif
-      calcSensorToOutputLatency(&sensorData);
-      tick++;
-      STATS_CNT_RATE_EVENT(&stabilizerRate);
+        stateEstimator(&state, tick);
+        compressState();
 
-      if (!rateSupervisorValidate(&rateSupervisorContext, xTaskGetTickCount())) {
-        if (!rateWarningDisplayed) {
-          DEBUG_PRINT("WARNING: stabilizer loop rate is off (%lu)\n", rateSupervisorLatestCount(&rateSupervisorContext));
-          rateWarningDisplayed = true;
+        if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
+          commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
+        }
+
+        commanderGetSetpoint(&setpoint, &state);
+        compressSetpoint();
+
+        // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
+
+        controller(&control, &setpoint, &sensorData, &state, tick);
+
+        checkEmergencyStopTimeout();
+
+        //
+        // The supervisor module keeps track of Crazyflie state such as if
+        // we are ok to fly, or if the Crazyflie is in flight.
+        //
+        supervisorUpdate(&sensorData);
+
+        if (emergencyStop || (systemIsArmed() == false)) {
+          motorsStop();
+        } else {
+          powerDistribution(&control, &motorThrustUncapped);
+          batteryCompensation(&motorThrustUncapped, &motorThrustBatCompUncapped);
+          powerDistributionCap(&motorThrustBatCompUncapped, &motorPwm);
+          setMotorRatios(&motorPwm);
+        }
+
+  #ifdef CONFIG_DECK_USD
+        // Log data to uSD card if configured
+        if (usddeckLoggingEnabled()
+            && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
+            && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
+          usddeckTriggerLogging();
+        }
+  #endif
+        calcSensorToOutputLatency(&sensorData);
+        STATS_CNT_RATE_EVENT(&stabilizerRate);
+
+        if (!rateSupervisorValidate(&rateSupervisorContext, xTaskGetTickCount())) {
+          if (!rateWarningDisplayed) {
+            DEBUG_PRINT("WARNING: stabilizer loop rate is off (%lu)\n", rateSupervisorLatestCount(&rateSupervisorContext));
+            rateWarningDisplayed = true;
+          }
         }
       }
-    }
-#ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
-    motorsBurstDshot();
-#endif
+  #ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
+      motorsBurstDshot();
+  #endif
 
-    // TODO (sam, jun 21 7pm): figure out why stab time isn't printing and figure out if stabilizer loop isa ctually running at 500hz
-    endTime = usecTimestamp();
-    DEBUG_PRINT("stab time: %d\n", (endTime - startTime));
+      // TODO (sam, jun 21 7pm): figure out why stab time isn't printing and figure out if stabilizer loop isa ctually running at 500hz
+      endTime = usecTimestamp();
+      if (tick >= nextPrintTick2) {
+        DEBUG_PRINT("stab time: %d\n", (endTime - startTime));
+        nextPrintTick2 += 100;
+      }
+    }
+    tick++;
   }
 }
 
