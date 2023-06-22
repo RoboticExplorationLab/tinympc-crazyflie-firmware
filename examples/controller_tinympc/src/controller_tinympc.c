@@ -47,6 +47,8 @@
 #include "slap/slap.h"
 #include "tinympc/tinympc.h"
 
+#include "stabilizer_types.h"
+
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "CONTROLLER_TINYMPC"
 #include "debug.h"
@@ -67,7 +69,7 @@ void appMain() {
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_500_HZ  // control frequency
+#define MPC_RATE RATE_100_HZ  // control frequency
 
 #include "params_500hz.h"
 #include "traj_fig8_single.h"
@@ -131,6 +133,7 @@ static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
+static uint32_t next_print_tick = 0;
 
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
@@ -185,7 +188,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 2;           // limit this if needed
+  stgs.max_iter = 6;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
@@ -272,7 +275,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d %d \n", step, info.status_val, info.iter, mpcTime);
+  if (tick >= next_print_tick) {
+    DEBUG_PRINT("%d %d %d %d \n", step, info.status_val, info.iter, mpcTime);
+    next_print_tick += 50;
+  }
   // DEBUG_PRINT("%d\n", mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
 
