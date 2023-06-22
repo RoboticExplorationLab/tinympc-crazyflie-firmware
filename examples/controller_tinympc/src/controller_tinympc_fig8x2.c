@@ -67,11 +67,10 @@ void appMain() {
 #define NSTATES 12    // no. of states (error state)
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_500_HZ  // control frequency
+#define MPC_RATE RATE_1000_HZ  // control frequency
 
 #include "params_500hz.h"
-#include "traj_fig8_single.h"
-// #include "traj_fig8.h"
+#include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
 static sfloat f_data[NSTATES] = {0};
@@ -125,12 +124,10 @@ static uint32_t mpcTime = 0;
 static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
-static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / 3;
-static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
-static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
+static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
+static bool en_traj = false;
 
 void controllerOutOfTreeInit(void) {
   /* Start MPC initialization*/
@@ -185,17 +182,15 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 2;           // limit this if needed
+  stgs.max_iter = 6;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
   /* End of MPC initialization */  
-
-  en_traj = true;
-  step = 0;  
-  traj_iter = 0;
+  step = 0;
+  en_traj = false;
 }
 
 bool controllerOutOfTreeTest() {
@@ -213,17 +208,35 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   uint64_t startTimestamp = usecTimestamp();
 
   // Update reference: 3 positions, k counts each MPC step
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < 3; ++j) {
-          Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
-        }
+  if (step % traj_hold == 0 && en_traj == true) {
+    traj_idx = (int)(step / traj_hold);
+    for (int i = 0; i < NHORIZON; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*3+j];
       }
     }
   }
-  
+  else {
+    // DEBUG_PRINT("Xref = [%.2f]\n", (double)(Xref[0].data[0]));
+    xg_data[0]  = setpoint->position.x;
+    xg_data[1]  = setpoint->position.y;
+    xg_data[2]  = setpoint->position.z;
+    xg_data[6]  = setpoint->velocity.x;
+    xg_data[7]  = setpoint->velocity.y;
+    xg_data[8]  = setpoint->velocity.z;
+    xg_data[9]  = radians(setpoint->attitudeRate.roll);
+    xg_data[10] = radians(setpoint->attitudeRate.pitch);
+    xg_data[11] = radians(setpoint->attitudeRate.yaw);
+    struct vec desired_rpy = mkvec(radians(setpoint->attitude.roll), 
+                                  radians(setpoint->attitude.pitch), 
+                                  radians(setpoint->attitude.yaw));
+    struct quat attitude = rpy2quat(desired_rpy);
+    struct vec phi = quat2rp(qnormalize(attitude));  
+    xg_data[3] = phi.x;
+    xg_data[4] = phi.y;
+    xg_data[5] = phi.z;
+  }
+
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
@@ -296,17 +309,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   control->controlMode = controlModePWM;
   
-  // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
-
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory, do it again
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
+  // stop trajectory at the end
+  if (traj_idx >= traj_length - NHORIZON) { 
+    en_traj = false;
+  } 
+  else step += 1;
 }
 
 /**
@@ -317,7 +324,6 @@ PARAM_GROUP_START(ctrlMPC)
 PARAM_ADD_CORE(PARAM_FLOAT | PARAM_PERSISTENT, uHover, &u_hover)
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_PERSISTENT, trajLength, &traj_length)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajHold, &traj_hold)
-PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, trajIter, &user_traj_iter)
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
 PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, enableTraj, &en_traj)

@@ -260,9 +260,17 @@ static void stabilizerTask(void* param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  uint64_t startTime = 0;
+  uint64_t endTime = 0;
+  uint64_t prevTime = 0;
+
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
+
+    startTime = usecTimestamp();
+    DEBUG_PRINT("time between: %d\n", (startTime - prevTime));
+    prevTime = startTime;
 
     // update sensorData struct (for logging variables)
     sensorsAcquire(&sensorData, tick);
@@ -334,6 +342,10 @@ static void stabilizerTask(void* param)
 #ifdef CONFIG_MOTORS_ESC_PROTOCOL_DSHOT
     motorsBurstDshot();
 #endif
+
+    // TODO (sam, jun 21 7pm): figure out why stab time isn't printing and figure out if stabilizer loop isa ctually running at 500hz
+    endTime = usecTimestamp();
+    DEBUG_PRINT("stab time: %d\n", (endTime - startTime));
   }
 }
 
