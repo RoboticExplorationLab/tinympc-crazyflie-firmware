@@ -9,20 +9,20 @@
 
 #include "matrix_checks.h"
 
-sfloat slap_InnerProduct(const Matrix x, const Matrix y) {
+float slap_InnerProduct(const Matrix x, const Matrix y) {
   SLAP_ASSERT_DENSE(x, NAN, "InnerProduct: x vector must be dense");
   SLAP_ASSERT_DENSE(y, NAN, "InnerProduct: x vector must be dense");
   int nx = slap_NumElements(x);
   int ny = slap_NumElements(x);
   int n = nx < ny ? nx : ny;
-  sfloat dot = 0;
+  float dot = 0;
   for (int i = 0; i < n; ++i) {
     dot += x.data[i] * y.data[i];
   }
   return dot;
 }
 
-sfloat slap_QuadraticForm(const Matrix y, const Matrix Q, const Matrix x) {
+float slap_QuadraticForm(const Matrix y, const Matrix Q, const Matrix x) {
   SLAP_ASSERT_VALID(y, NAN, "QuadraticForm: y vector not valid");
   SLAP_ASSERT_VALID(Q, NAN, "QuadraticForm: Q matrix not valid");
   SLAP_ASSERT_VALID(x, NAN, "QuadraticForm: x vector not valid");
@@ -53,12 +53,12 @@ sfloat slap_QuadraticForm(const Matrix y, const Matrix Q, const Matrix x) {
                            "Dimensions incompatible for QuadraticForm");
     return NAN;
   }
-  sfloat out = 0.0;
+  float out = 0.0;
   for (int j = 0; j < m; ++j) {
     for (int i = 0; i < n; ++i) {
-      sfloat xj = x.data[j];
-      sfloat yi = y.data[i];
-      sfloat Aij = *slap_GetElementConst(Q, i, j);
+      float xj = x.data[j];
+      float yi = y.data[i];
+      float Aij = *slap_GetElementConst(Q, i, j);
       out += yi * Aij * xj;
     }
   }
@@ -82,9 +82,9 @@ enum slap_ErrorCode slap_OuterProduct(Matrix C, Matrix x, Matrix y) {
               "OuterProduct: Output matrix doesn't have enough columns. Needs %d, has %d", m,
               slap_NumCols(C));
   for (int j = 0; j < m; ++j) {
-    sfloat yj = y.data[j];
+    float yj = y.data[j];
     for (int i = 0; i < n; ++i) {
-      sfloat* Cij = slap_GetElement(C, i, j);
+      float* Cij = slap_GetElement(C, i, j);
       *Cij = x.data[i] * yj;
     }
   }

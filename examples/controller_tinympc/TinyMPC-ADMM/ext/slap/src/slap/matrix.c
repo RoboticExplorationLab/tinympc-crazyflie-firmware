@@ -1,6 +1,6 @@
 #include "matrix.h"
 
-Matrix slap_MatrixFromArray(int rows, int cols, sfloat* data) {  // NOLINT(readability-non-const-parameter)
+Matrix slap_MatrixFromArray(int rows, int cols, float* data) {  // NOLINT(readability-non-const-parameter)
   Matrix mat = {rows, cols, rows, 0, data, slap_DENSE};
   return mat;
 }

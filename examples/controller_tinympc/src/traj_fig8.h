@@ -8,7 +8,7 @@ extern "C" {
 #include <slap/slap.h>
 
 /* Move from origin to South-West*/
-static const sfloat X_ref_data[] = {
+static const float X_ref_data[] = {
   0.0,0.0,1.0,
   0.0,0.0,1.0,
   0.0,0.0,1.0,

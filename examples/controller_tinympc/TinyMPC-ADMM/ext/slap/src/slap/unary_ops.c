@@ -8,7 +8,7 @@
 #include "iterator.h"
 #include "matrix_checks.h"
 
-enum slap_ErrorCode slap_SetConst(Matrix mat, sfloat val) {
+enum slap_ErrorCode slap_SetConst(Matrix mat, float val) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "SetConst: invalid matrix");
   for (MatrixIterator it = slap_Iterator(mat); !slap_IsFinished(&it); slap_Step(&it)) {
     mat.data[it.index] = val;
@@ -16,7 +16,7 @@ enum slap_ErrorCode slap_SetConst(Matrix mat, sfloat val) {
   return SLAP_NO_ERROR;
 }
 
-enum slap_ErrorCode slap_ScaleByConst(Matrix mat, sfloat alpha) {
+enum slap_ErrorCode slap_ScaleByConst(Matrix mat, float alpha) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "ScaleByConst: invalid matrix");
   for (MatrixIterator it = slap_Iterator(mat); !slap_IsFinished(&it); slap_Step(&it)) {
     mat.data[it.index] *= alpha;
@@ -24,7 +24,7 @@ enum slap_ErrorCode slap_ScaleByConst(Matrix mat, sfloat alpha) {
   return 0;
 }
 
-enum slap_ErrorCode slap_SetIdentity(Matrix mat, sfloat val) {
+enum slap_ErrorCode slap_SetIdentity(Matrix mat, float val) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "SetIdentity: invalid matrix");
   slap_SetConst(mat, 0.0);
   for (int k = 0; k < slap_MinDim(mat); ++k) {
@@ -33,7 +33,7 @@ enum slap_ErrorCode slap_SetIdentity(Matrix mat, sfloat val) {
   return 0;
 }
 
-enum slap_ErrorCode slap_SetDiagonal(Matrix mat, const sfloat* diag, int len) {
+enum slap_ErrorCode slap_SetDiagonal(Matrix mat, const float* diag, int len) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "SetDiagonal: invalid matrix");
   SLAP_ASSERT(diag != NULL, SLAP_BAD_POINTER, SLAP_BAD_POINTER,
               "SetDiagonal: pointer to diagonal elements is NULL");
@@ -45,27 +45,27 @@ enum slap_ErrorCode slap_SetDiagonal(Matrix mat, const sfloat* diag, int len) {
   return SLAP_NO_ERROR;
 }
 
-enum slap_ErrorCode slap_AddIdentity(Matrix mat, sfloat alpha) {
+enum slap_ErrorCode slap_AddIdentity(Matrix mat, float alpha) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "AddIdentity: invalid matrix");
   int n = slap_MinDim(mat);
   for (int i = 0; i < n; ++i) {
-    sfloat diag = *slap_GetElement(mat, i, i);
+    float diag = *slap_GetElement(mat, i, i);
     slap_SetElement(mat, i, i, diag + alpha);
   }
   return SLAP_NO_ERROR;
 }
 
 
-enum slap_ErrorCode slap_SetRange(Matrix mat, sfloat start, sfloat stop) {
+enum slap_ErrorCode slap_SetRange(Matrix mat, float start, float stop) {
   SLAP_CHECK_MATRIX(mat);
-  sfloat range = stop - start;
+  float range = stop - start;
   int num_el = slap_NumElements(mat) - 1;
   if (num_el <= 0) {
     return SLAP_EMPTY_MATRIX;
   }
 
-  sfloat step = range / (sfloat)num_el;
-  sfloat val = 0;
+  float step = range / (float)num_el;
+  float val = 0;
   int k = 0;
   for (int j = 0; j < slap_NumCols(mat); ++j) {
     for (int i = 0; i < slap_NumRows(mat); ++i) {

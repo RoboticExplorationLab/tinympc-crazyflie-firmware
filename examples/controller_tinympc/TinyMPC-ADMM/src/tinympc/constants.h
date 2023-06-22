@@ -92,11 +92,11 @@ enum tiny_ErrorCode {
 # endif /* ifndef TINY_NULL */
 
 # ifndef TINY_NAN
-#  define TINY_NAN ((sfloat)0x7fc00000UL)  // not a number
+#  define TINY_NAN ((float)0x7fc00000UL)  // not a number
 # endif /* ifndef TINY_NAN */
 
 # ifndef TINY_INFTY
-#  define TINY_INFTY ((sfloat)1e30)        // infinity
+#  define TINY_INFTY ((float)1e30)        // infinity
 # endif /* ifndef TINY_INFTY */
 
 /* Printing */

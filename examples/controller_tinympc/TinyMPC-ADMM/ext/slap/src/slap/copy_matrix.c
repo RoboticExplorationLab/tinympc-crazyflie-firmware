@@ -21,7 +21,7 @@ enum slap_ErrorCode slap_Copy(Matrix dest, Matrix src) {
       slap_SetElement(dest, i, j, *slap_GetElement(src, i, j));
     }
   }
-  //  memcpy(dest.data, src.data, slap_NumElements(dest) * sizeof(sfloat));
+  //  memcpy(dest.data, src.data, slap_NumElements(dest) * sizeof(float));
   return SLAP_NO_ERROR;
 }
 
@@ -45,7 +45,7 @@ enum slap_ErrorCode slap_CopyTranspose(Matrix dest, Matrix src) {
   return SLAP_NO_ERROR;
 }
 
-enum slap_ErrorCode slap_CopyFromArray(Matrix mat, const sfloat* data) {
+enum slap_ErrorCode slap_CopyFromArray(Matrix mat, const float* data) {
   SLAP_ASSERT_VALID(mat, SLAP_INVALID_MATRIX, "CopyFromArray: invalid matrix");
   SLAP_ASSERT(data != NULL, SLAP_BAD_POINTER, SLAP_BAD_POINTER,
               "CopyFromArray: Can't copy from raw array, pointer is NULL");

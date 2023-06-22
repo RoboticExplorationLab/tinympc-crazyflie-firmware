@@ -14,20 +14,20 @@ enum slap_ErrorCode slap_Cholesky(Matrix A) {
   for (int j = 0; j < n; ++j) {
     for (int k = 0; k < j; ++k) {
       for (int i = j; i < n; ++i) {
-        sfloat* Aij = slap_GetElement(A, i, j);
-        sfloat Aik = *slap_GetElement(A, i, k);
-        sfloat Ajk = *slap_GetElement(A, j, k);
+        float* Aij = slap_GetElement(A, i, j);
+        float Aik = *slap_GetElement(A, i, k);
+        float Ajk = *slap_GetElement(A, j, k);
         *Aij -= Aik * Ajk;
       }
     }
-    sfloat Ajj = *slap_GetElement(A, j, j);
+    float Ajj = *slap_GetElement(A, j, j);
     if (Ajj <= 0) {
       return SLAP_CHOLESKY_FAIL;
     }
-    sfloat ajj = sqrt(Ajj);
+    float ajj = sqrt(Ajj);
 
     for (int i = j; i < n; ++i) {
-      sfloat* Aij = slap_GetElement(A, i, j);
+      float* Aij = slap_GetElement(A, i, j);
       *Aij /= ajj;
     }
   }

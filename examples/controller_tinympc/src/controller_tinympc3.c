@@ -76,7 +76,7 @@ void appMain() {
 /* Allocate global variables for MPC */
 
 // Precompute data offline
-static sfloat A_data[NSTATES*NSTATES] = {
+static float A_data[NSTATES*NSTATES] = {
   1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
   0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
   0.000000f,0.000000f,1.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,
@@ -91,33 +91,33 @@ static sfloat A_data[NSTATES*NSTATES] = {
   0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,0.010000f,0.000000f,0.000000f,0.000000f,0.000000f,0.000000f,1.000000f,
 };
 
-static sfloat B_data[NSTATES*NINPUTS] = {
+static float B_data[NSTATES*NINPUTS] = {
   -0.000019f,0.000019f,0.000962f,-0.027012f,-0.027145f,0.001937f,-0.002989f,0.002974f,0.096236f,-5.402457f,-5.428992f,0.387450f,
   0.000021f,0.000021f,0.000962f,-0.029747f,0.029850f,-0.000709f,0.003287f,0.003275f,0.096236f,-5.949452f,5.969943f,-0.141728f,
   0.000019f,-0.000019f,0.000962f,0.027043f,0.027230f,-0.002731f,0.002998f,-0.002978f,0.096236f,5.408501f,5.445914f,-0.546295f,
   -0.000021f,-0.000021f,0.000962f,0.029717f,-0.029934f,0.001503f,-0.003296f,-0.003272f,0.096236f,5.943408f,-5.986864f,0.300572f,
 };
 
-static sfloat f_data[NSTATES] = {0};
+static float f_data[NSTATES] = {0};
 
 // Create data array, all zero initialization
-static sfloat x0_data[NSTATES] = {0.0f};       // initial state
-static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
-static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
-static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
-static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
-static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
-// static sfloat Q_data[NSTATES * NSTATES] = {0.0f};
-// static sfloat R_data[NINPUTS * NINPUTS] = {0.0f};
-static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
-static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
-static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat umin_data[NINPUTS] = {0.0f};
-static sfloat umax_data[NINPUTS] = {0.0f};
-static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
+static float x0_data[NSTATES] = {0.0f};       // initial state
+static float xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
+static float ug_data[NINPUTS] = {0.0f};       // goal input 
+static float X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
+static float U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
+static float d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static float p_data[NSTATES * NHORIZON] = {0.0f};
+// static float Q_data[NSTATES * NSTATES] = {0.0f};
+// static float R_data[NINPUTS * NINPUTS] = {0.0f};
+static float q_data[NSTATES*(NHORIZON-1)] = {0.0f};
+static float r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static float r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static float Acu_data[NINPUTS * NINPUTS] = {0.0f};  
+static float YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static float umin_data[NINPUTS] = {0.0f};
+static float umax_data[NINPUTS] = {0.0f};
+static float temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
 static Matrix Xref[NSTATES*NHORIZON];
@@ -187,7 +187,7 @@ void controllerOutOfTreeInit(void) {
 
   // Set up LQR cost 
   tiny_InitDataQuadCostFromArray(&work, Q_data, R_data);
-  // sfloat Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  // float Qdiag[NSTATES] = {10, 10, 10, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   // slap_SetDiagonal(data.Q, Qdiag, NSTATES);
   // slap_SetIdentity(data.R, 1);
   slap_AddIdentity(data.R, work.rho); // \tilde{R}

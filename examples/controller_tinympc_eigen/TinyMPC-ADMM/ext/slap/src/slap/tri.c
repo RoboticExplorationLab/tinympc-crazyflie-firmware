@@ -29,11 +29,11 @@ enum slap_ErrorCode slap_UpperTriMulAdd(Matrix C, const Matrix U, const Matrix B
   int p = slap_NumCols(B);
   for (int j = 0; j < p; ++j) {
     for (int i = 0; i < m; ++i) {
-      sfloat* Cij = slap_GetElement(C, i, j);
+      float* Cij = slap_GetElement(C, i, j);
       *Cij *= beta;
       for (int k = i; k < n; ++k) {
-        sfloat Uik = *slap_GetElementConst(U, i, k);
-        sfloat Bkj = *slap_GetElementConst(B, k, j);
+        float Uik = *slap_GetElementConst(U, i, k);
+        float Bkj = *slap_GetElementConst(B, k, j);
         *Cij += alpha * Uik * Bkj;
       }
     }
@@ -62,12 +62,12 @@ enum slap_ErrorCode slap_LowerTriMulAdd(Matrix C, const Matrix L, const Matrix B
   int p = slap_NumCols(B);
   for (int j = 0; j < p; ++j) {
     for (int i = 0; i < m; ++i) {
-      sfloat* Cij = slap_GetElement(C, i, j);
+      float* Cij = slap_GetElement(C, i, j);
       *Cij *= beta;
       int stop = i < n ? i + 1 : n;
       for (int k = 0; k < stop; ++k) {
-        sfloat Uik = *slap_GetElementConst(L, i, k);
-        sfloat Bkj = *slap_GetElementConst(B, k, j);
+        float Uik = *slap_GetElementConst(L, i, k);
+        float Bkj = *slap_GetElementConst(B, k, j);
         *Cij += alpha * Uik * Bkj;
       }
     }
@@ -85,7 +85,7 @@ bool slap_CheckUpperTri(const Matrix A) {
   }
   for (int j = 0; j < n_cols; ++j) {
     for (int i = j + 1; i < n_rows; ++i) {
-      sfloat val = *slap_GetElementConst(A, i, j);
+      float val = *slap_GetElementConst(A, i, j);
       if (fabs(val) > 0) {
         is_triu = false;
         break;
@@ -106,7 +106,7 @@ bool slap_CheckLowerTri(const Matrix A) {
   }
   for (int j = 0; j < n_cols; ++j) {
     for (int i = 0; i < j; ++i) {
-      sfloat val = *slap_GetElementConst(A, i, j);
+      float val = *slap_GetElementConst(A, i, j);
       if (fabs(val) > 0) {
         is_tril = false;
         break;
@@ -161,14 +161,14 @@ enum slap_ErrorCode slap_TriSolve(Matrix L, Matrix b) {
   for (int j_ = 0; j_ < n; ++j_) {
     int j = tL ? n - j_ - 1 : j_;
     for (int k = 0; k < m; ++k) {
-      sfloat* xjk = slap_GetElement(b, j, k);
-      sfloat Ljj = *slap_GetElement(L, j, j);
+      float* xjk = slap_GetElement(b, j, k);
+      float Ljj = *slap_GetElement(L, j, j);
       *xjk /= Ljj;
 
       for (int i_ = j_ + 1; i_ < n; ++i_) {
         int i = tL ? i_ - (j_ + 1) : i_;
-        sfloat* xik = slap_GetElement(b, i, k);
-        sfloat Lij = *slap_GetElement(L, i, j);
+        float* xik = slap_GetElement(b, i, k);
+        float Lij = *slap_GetElement(L, i, j);
         *xik -= Lij * (*xjk);
       }
     }

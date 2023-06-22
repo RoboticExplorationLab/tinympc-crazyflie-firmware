@@ -27,14 +27,14 @@
  * @param k The index of the column of R on which to calculate the reflection.
  * @return The scaling factor \f$beta\f$
  */
-sfloat Householder(Matrix R, Matrix v, int k) {
+float Householder(Matrix R, Matrix v, int k) {
   int m = slap_NumRows(R);
 
   // Copy kth column of R below the diagonal
-  sfloat sigma = 0;
-  sfloat xk = *slap_GetElement(R, k, k);
+  float sigma = 0;
+  float xk = *slap_GetElement(R, k, k);
   for (int i = k + 1; i < m; ++i) {
-    sfloat xi = *slap_GetElement(R, i, k);
+    float xi = *slap_GetElement(R, i, k);
     v.data[i] = xi;
     sigma += xi * xi;
   }
@@ -45,8 +45,8 @@ sfloat Householder(Matrix R, Matrix v, int k) {
   }
 
   // Reflect in a way that avoids round-off error due to cancellation
-  sfloat norm_v = sqrt(sigma + xk * xk);
-  sfloat vk = xk;
+  float norm_v = sqrt(sigma + xk * xk);
+  float vk = xk;
   if (xk > 0) {
     vk += norm_v;
   } else {
@@ -55,7 +55,7 @@ sfloat Householder(Matrix R, Matrix v, int k) {
   v.data[k] = vk;
 
   // Calculate scaling factor
-  sfloat beta = 2 / (vk * vk + sigma);
+  float beta = 2 / (vk * vk + sigma);
 
   return beta;
 }
@@ -70,7 +70,7 @@ sfloat Householder(Matrix R, Matrix v, int k) {
  * @param[in] k Column index
  * @param alpha scaling factor
  */
-void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
+void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, float alpha, int k) {
   int m = slap_NumRows(Q);
 
   // Top left corner: Stays the same
@@ -79,11 +79,11 @@ void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
 //  printf("Qmuly with k = %d\n", k);
 //  printf("  Looping columns %d to %d\n", k, m - 1);
   for (int j = k; j < m; ++j) {
-    sfloat v_j = 1;
+    float v_j = 1;
     if (j > k) {
       v_j = *slap_GetElement(R, j, k);
     }
-    sfloat Qiv;
+    float Qiv;
 
     // Top right corner: Q12 - alpha * Q12 * v * v'
 //    printf("    Looping rows %d to %d\n", 0, k - 1);
@@ -92,7 +92,7 @@ void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
 
       // Calculate Q[i,:] * v
       for (int kk = k; kk < m; ++kk) {
-        sfloat v_kk = 1.0;
+        float v_kk = 1.0;
         if (kk > k) {
           v_kk = *slap_GetElement(R, kk, k);
         }
@@ -100,7 +100,7 @@ void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
       }
 
       // Calculate the output
-      sfloat *Qij = slap_GetElement(Q_bar, i, j);
+      float *Qij = slap_GetElement(Q_bar, i, j);
       *Qij -= alpha * Qiv * v_j;
 //      printf("    Qv[%d] = %5.3f, v[%d] = %5.3f\n", i, Qiv, j, v_j);
     }
@@ -111,7 +111,7 @@ void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
 
       // Calculate Q[i,:] * v
       for (int kk = k; kk < m; kk++) {
-        sfloat v_kk = 1.0;
+        float v_kk = 1.0;
         if (kk > k) {
           v_kk = *slap_GetElement(R, kk, k);
         }
@@ -119,7 +119,7 @@ void Qmuly(Matrix Q_bar, Matrix Q, Matrix R, sfloat alpha, int k) {
       }
 
       // Calculate the output
-      sfloat *Qij = slap_GetElement(Q_bar, i, j);
+      float *Qij = slap_GetElement(Q_bar, i, j);
       *Qij -= alpha * Qiv * v_j;
     }
   }
@@ -136,7 +136,7 @@ enum slap_ErrorCode slap_QR(Matrix A, Matrix betas, Matrix temp) {
   // Loop over columns
   for (int k = 0; k < n; ++k) {
     // Calculate Householder reflection vector
-    sfloat beta = Householder(A, betas, k);
+    float beta = Householder(A, betas, k);
 
     // Perform Householder reflection
     // A = (I - beta * v * v') * A
@@ -152,14 +152,14 @@ enum slap_ErrorCode slap_QR(Matrix A, Matrix betas, Matrix temp) {
     // 2. Calculate A = A - beta *  v * temp
     for (int j = k; j < n; ++j) {    // loop over columns
       for (int i = k; i < m; ++i) {  // loop over rows
-        sfloat *Aij = slap_GetElement(A, i, j);
+        float *Aij = slap_GetElement(A, i, j);
         *Aij -= beta * v.data[i] * temp.data[j];
       }
     }
 
     // Store y = v / v[1] below the diagonal
     // Discards the first element, which is known to be 1
-    sfloat v_k = v.data[k];
+    float v_k = v.data[k];
     for (int i = k + 1; i < m; ++i) {
       slap_SetElement(A, i, k, v.data[i] / v_k);
     }
@@ -195,7 +195,7 @@ enum slap_ErrorCode slap_Qtb(const Matrix R, const Matrix betas, Matrix b) {
     // b[k+1] = b[k] - beta[k] * v[k] * (v[k]'b[k])
 
     // alpha = beta[k] * v[k]'b[k]
-    sfloat alpha = b.data[k];
+    float alpha = b.data[k];
     for (int i = k + 1; i < m; ++i) {
         alpha += *slap_GetElement(R, i, k) * b.data[i];
     }

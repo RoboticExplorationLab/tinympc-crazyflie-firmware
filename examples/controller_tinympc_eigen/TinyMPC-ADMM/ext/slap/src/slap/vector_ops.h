@@ -24,7 +24,7 @@
  * @param[out] max_value
  * @return A MatrixIterator pointing to the max value
  */
-MatrixIterator slap_ArgMax(Matrix mat, sfloat *max_value);
+MatrixIterator slap_ArgMax(Matrix mat, float *max_value);
 
 /**
  * @brief Find the minimum value in the matrix
@@ -34,7 +34,7 @@ MatrixIterator slap_ArgMax(Matrix mat, sfloat *max_value);
  * @param[out] min_value
  * @return A MatrixIterator pointing to the min value
  */
-MatrixIterator slap_ArgMin(Matrix mat, sfloat *min_value);
+MatrixIterator slap_ArgMin(Matrix mat, float *min_value);
 
 /**
  * @brief Find the maximum value in the matrix
@@ -43,7 +43,7 @@ MatrixIterator slap_ArgMin(Matrix mat, sfloat *min_value);
  * @param mat A valid Matrix
  * @return The maximum value, or NaN if there was an error
  */
-sfloat slap_Max(Matrix mat);
+float slap_Max(Matrix mat);
 
 /**
  * @brief Find the minimum value in the matrix
@@ -52,7 +52,7 @@ sfloat slap_Max(Matrix mat);
  * @param mat A valid Matrix
  * @return The minimum value, or NaN if there was an error
 */
-sfloat slap_Min(Matrix mat);
+float slap_Min(Matrix mat);
 
 /**
  * @brief Calculate the squared 2-norm of the matrix (treating it like a vector)
@@ -61,7 +61,7 @@ sfloat slap_Min(Matrix mat);
  * @param mat A valid Matrix
  * @return The two norm squared, or NaN if there was an error
  */
-sfloat slap_NormTwoSquared(Matrix mat);
+float slap_NormTwoSquared(Matrix mat);
 
 /**
  * @brief Calculate the 2-norm, treating the matrix as a vector
@@ -70,7 +70,7 @@ sfloat slap_NormTwoSquared(Matrix mat);
  * @param mat A valid matrix
  * @return The two-norm, or NaN if there was an error
  */
-sfloat slap_NormTwo(Matrix mat);
+float slap_NormTwo(Matrix mat);
 
 /**
  * @brief Calculate the infinity norm, treating the matrix as a vector
@@ -79,7 +79,7 @@ sfloat slap_NormTwo(Matrix mat);
  * @param mat A valid matrix
  * @return The infinity norm, or NaN if there was an error
  */
-sfloat slap_NormInf(Matrix mat);
+float slap_NormInf(Matrix mat);
 
 /**
  * @brief Calculate the one norm, treating the matrix as a vector
@@ -88,7 +88,7 @@ sfloat slap_NormInf(Matrix mat);
  * @param mat A valid matrix
  * @return The one norm, or NaN if there was an error
  */
-sfloat slap_NormOne(Matrix mat);
+float slap_NormOne(Matrix mat);
 
 /**
  * @brief Calculate the sum of all of the elements
@@ -97,4 +97,4 @@ sfloat slap_NormOne(Matrix mat);
  * @param mat A valid matrix
  * @return The sum of all of the elements, or NaN if there was an error
  */
-sfloat slap_Sum(Matrix mat);
+float slap_Sum(Matrix mat);

@@ -28,7 +28,7 @@
  *
  * # Example
  * for (MatrixIterator it = slap_Iterator(mat); !slap_IsFinished(&it); slap_Step(&it)) {
- *  sfloat value = mat.data[it.index];    // Use `index` to directly index the array
+ *  float value = mat.data[it.index];    // Use `index` to directly index the array
  *  int linear_index = it.k;              // `k` is the linear index into the array
  *  slap_SetElement(mat, it.i, it.j);     // `i` and `j` are the cartesian indices
  * }

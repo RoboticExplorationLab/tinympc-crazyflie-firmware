@@ -73,25 +73,25 @@ void appMain() {
 #include "traj_fig8.h"
 
 /* Allocate global variables for MPC */
-static sfloat f_data[NSTATES] = {0};
+static float f_data[NSTATES] = {0};
 
 // Create data array, all zero initialization
-static sfloat x0_data[NSTATES] = {0.0f};       // initial state
-static sfloat xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
-static sfloat ug_data[NINPUTS] = {0.0f};       // goal input 
-static sfloat Xref_data[NSTATES * NHORIZON] = {0};
-static sfloat X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
-static sfloat U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
-static sfloat d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat p_data[NSTATES * NHORIZON] = {0.0f};
-static sfloat q_data[NSTATES*(NHORIZON-1)] = {0.0f};
-static sfloat r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
-static sfloat Acu_data[NINPUTS * NINPUTS] = {0.0f};  
-static sfloat YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
-static sfloat umin_data[NINPUTS] = {0.0f};
-static sfloat umax_data[NINPUTS] = {0.0f};
-static sfloat temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
+static float x0_data[NSTATES] = {0.0f};       // initial state
+static float xg_data[NSTATES] = {0.0f};       // goal state (if not tracking)
+static float ug_data[NINPUTS] = {0.0f};       // goal input 
+static float Xref_data[NSTATES * NHORIZON] = {0};
+static float X_data[NSTATES * NHORIZON] = {0.0f};        // X in MPC solve
+static float U_data[NINPUTS * (NHORIZON - 1)] = {0.0f};  // U in MPC solve
+static float d_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static float p_data[NSTATES * NHORIZON] = {0.0f};
+static float q_data[NSTATES*(NHORIZON-1)] = {0.0f};
+static float r_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static float r_tilde_data[NINPUTS*(NHORIZON-1)] = {0.0f};
+static float Acu_data[NINPUTS * NINPUTS] = {0.0f};  
+static float YU_data[NINPUTS * (NHORIZON - 1)] = {0.0f};
+static float umin_data[NINPUTS] = {0.0f};
+static float umax_data[NINPUTS] = {0.0f};
+static float temp_data[NINPUTS + 2*NINPUTS*(NHORIZON - 1)] = {0.0f};
 
 // Created matrices
 static Matrix Xref[NHORIZON];

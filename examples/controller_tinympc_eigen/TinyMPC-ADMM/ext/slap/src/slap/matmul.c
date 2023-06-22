@@ -7,8 +7,8 @@
 #include "tri.h"
 
 enum slap_ErrorCode slap_MatMulAdd(
-    Matrix C, Matrix A, Matrix B, sfloat alpha,
-    sfloat beta) {
+    Matrix C, Matrix A, Matrix B, float alpha,
+    float beta) {
 
   // Check for special structure
   if (slap_GetType(A) == slap_TRIANGULAR_UPPER) {
@@ -38,11 +38,11 @@ enum slap_ErrorCode slap_MatMulAdd(
               slap_NumCols(C), p);
   for (int i = 0; i < n; ++i) {    // rows of output
     for (int j = 0; j < p; ++j) {  // Columns of output
-      sfloat* Cij = slap_GetElement(C, i, j);
+      float* Cij = slap_GetElement(C, i, j);
       *Cij *= beta;
       for (int k = 0; k < m; ++k) {  // columns of A, rows of B
-        sfloat Aik = *slap_GetElementConst(A, i, k);
-        sfloat Bkj = *slap_GetElementConst(B, k, j);
+        float Aik = *slap_GetElementConst(A, i, k);
+        float Bkj = *slap_GetElementConst(B, k, j);
         *Cij += alpha * Aik * Bkj;
       }
     }
@@ -60,9 +60,9 @@ enum slap_ErrorCode slap_MatMulAB(Matrix C, Matrix A, Matrix B) {
   int n = A.rows;
   int m = A.cols;
   int p = B.cols;
-  sfloat Aik;
-  sfloat Bkj;
-  sfloat Cij;
+  float Aik;
+  float Bkj;
+  float Cij;
   int ij;
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < p; ++j) {
@@ -93,10 +93,10 @@ enum slap_ErrorCode slap_MatMulAtB(Matrix C, Matrix A, Matrix B) {
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < p; ++j) {
       ij = i + n * j;
-      sfloat Cij = 0;
+      float Cij = 0;
       for (int k = 0; k < m; ++k) {
-        sfloat Aki = A.data[k + i * m];
-        sfloat Bkj = B.data[k + j * m];
+        float Aki = A.data[k + i * m];
+        float Bkj = B.data[k + j * m];
         Cij += Aki * Bkj;
       }
       C.data[ij] = Cij;

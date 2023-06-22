@@ -3,7 +3,7 @@
 enum tiny_ErrorCode tiny_InitModel(tiny_Model* model, const int nstates,
                                    const int ninputs, const int nhorizon,
                                    const int ltv, const int affine, 
-                                   const sfloat dt) {
+                                   const float dt) {
   SLAP_ASSERT(nstates > 0 && ninputs > 0 && nstates >= ninputs, SLAP_INVALID_DIMENSION, TINY_SLAP_ERROR, 
   "tiny_InitModel: nstates (%d) >= ninputs (%d) > 0", nstates, ninputs);  
 
@@ -55,7 +55,7 @@ enum tiny_ErrorCode tiny_InitModelDataMatrix(tiny_Model* model,
 
 // User provides matrix as column-major array
 enum tiny_ErrorCode tiny_InitModelFromArray(tiny_Model* model, Matrix* A, 
-    Matrix* B, Matrix* f, sfloat* A_array, sfloat* B_array, sfloat* f_array) {
+    Matrix* B, Matrix* f, float* A_array, float* B_array, float* f_array) {
   SLAP_ASSERT(A != TINY_NULL && B != TINY_NULL, SLAP_BAD_POINTER, TINY_SLAP_ERROR,
   "InitModelData: A and B must not be TINY_NULL");
   SLAP_ASSERT(A_array != TINY_NULL && A_array != TINY_NULL, SLAP_BAD_POINTER, TINY_SLAP_ERROR,
@@ -64,8 +64,8 @@ enum tiny_ErrorCode tiny_InitModelFromArray(tiny_Model* model, Matrix* A,
   model->B = B;
   
   if (model->ltv) {
-    sfloat* A_ptr = A_array;
-    sfloat* B_ptr = B_array;
+    float* A_ptr = A_array;
+    float* B_ptr = B_array;
     for (int k = 0; k < model->nhorizon-1; ++k) {
       model->A[k] = slap_MatrixFromArray(model->nstates, model->nstates, A_ptr);
       A_ptr += model->nstates * model->nstates;
@@ -79,7 +79,7 @@ enum tiny_ErrorCode tiny_InitModelFromArray(tiny_Model* model, Matrix* A,
     "InitModelData: f must not be TINY_NULL");
       if (f && f_array) {  
         model->f = f;
-        sfloat* f_ptr = f_array;
+        float* f_ptr = f_array;
         for (int k = 0; k < model->nhorizon-1; ++k) {
           model->f[k] = slap_MatrixFromArray(model->nstates, 1, f_ptr);
           f_ptr += model->nstates;     
