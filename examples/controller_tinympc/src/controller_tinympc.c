@@ -65,6 +65,7 @@ void appMain() {
 // Macro variables
 #define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
+#define NREF 3        // no. of states in references
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
