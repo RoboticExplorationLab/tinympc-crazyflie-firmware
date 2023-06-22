@@ -127,8 +127,8 @@ static VectorMf ZU[NHORIZON-1];
 static VectorMf ZU_new[NHORIZON-1];
 
 static VectorNf x0;
-static VectorNf xg = (VectorNf() << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0).finished();
-static VectorMf ug = (VectorMf() << 0, 0, 0, 0).finished();
+static VectorNf xg;
+static VectorMf ug;
 
 // Create TinyMPC struct
 static tiny_Model model;
@@ -289,9 +289,10 @@ void controllerOutOfTreeInit(void) {
   tiny_InitDataCost(&work, &Q, q, &R, r, r_tilde);
   // R = R + stgs.rho_init * MatrixMf::Identity();
   // /* Set up constraints */
-  tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
   ucu.fill(1 - u_hover);
   lcu.fill(-u_hover);
+  tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
+
   tiny_UpdateLinearCost(&work);
 
   /* Solver settings */
@@ -299,7 +300,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 10;           // limit this if needed
+  stgs.max_iter = 6;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
@@ -483,7 +484,7 @@ LOG_ADD(LOG_INT8, result, &result)
 LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
 LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0].data()[0]))
+LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
 LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
 LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
 

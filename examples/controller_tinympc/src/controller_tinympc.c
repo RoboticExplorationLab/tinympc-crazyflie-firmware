@@ -65,7 +65,6 @@ void appMain() {
 // Macro variables
 #define DT 0.002f       // dt
 #define NSTATES 12    // no. of states (error state)
-#define NREF 12        // no. of states in references
 #define NINPUTS 4     // no. of controls
 #define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
@@ -126,7 +125,7 @@ static float u_hover = 0.67f;
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NREF;
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
