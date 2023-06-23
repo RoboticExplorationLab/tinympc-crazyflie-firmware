@@ -45,10 +45,11 @@
 #include "num.h"
 #include "math3d.h"
 #include "slap/slap.h"
+
 #include "tinympc/tinympc.h"
 
 // Edit the debug name to get nice debug prints
-#define DEBUG_MODULE "CONTROLLER_TINYMPC"
+#define DEBUG_MODULE "TINYMPC"
 #include "debug.h"
 
 void appMain() {
@@ -70,7 +71,8 @@ void appMain() {
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
-#include "traj_fig8_12.h"
+// #include "traj_fig8_12.h"
+#include "traj_circle_500hz.h"
 
 /* Allocate global variables for MPC */
 static float f_data[NSTATES] = {0};
@@ -127,7 +129,7 @@ static uint32_t step = 0;
 static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
+static int8_t traj_hold = 2;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 
@@ -155,7 +157,7 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolnDualsFromArray(&work, 0, YU, 0, YU_data, 0);
 
   tiny_SetInitialState(&work, x0_data);  
-  tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
+  // tiny_SetGoalReference(&work, Xref, Uref, xg_data, ug_data);
   data.Xref = Xref;
   data.Uref = Uref;
   for (int i = 0; i < NHORIZON; ++i) {
@@ -221,9 +223,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        // for (int j = 0; j < NREF; ++j) {
-        //   Xref_data[i*NSTATES + j] = X_ref_data[(traj_idx + i)*NREF+j];
-        // }
         (Xref[i]).data = &(X_ref_data[(traj_idx + i)*NSTATES]);
         if (i < NHORIZON - 1) {
           (Uref[i]).data = &(U_ref_data[(traj_idx + i)*NINPUTS]);
@@ -257,8 +256,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("x_ref = %.2f\n", (double)((Xref[0].data)[0]));
 
   /* Get current state (initial state for MPC) */
-  // delta_x = x - x_bar; x_bar = 0
-  // Positon error, [m]
+  //// delta_x = x - x_bar; x_bar = 0
+  //// Positon error, [m]
   x0_data[0] = state->position.x;
   x0_data[1] = state->position.y;
   x0_data[2] = state->position.z;
@@ -266,7 +265,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x0_data[6] = state->velocity.x;
   x0_data[7] = state->velocity.y;
   x0_data[8] = state->velocity.z;
-  // Angular rate error, [rad/s]
+  //// Angular rate error, [rad/s]
   x0_data[9]  = radians(sensors->gyro.x);   
   x0_data[10] = radians(sensors->gyro.y);
   x0_data[11] = radians(sensors->gyro.z);
@@ -276,11 +275,33 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     state->attitudeQuaternion.z,
     state->attitudeQuaternion.w);  // current attitude
   phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
-  // Attitude error
+  //// Attitude error
   x0_data[3] = phi.x;
   x0_data[4] = phi.y;
   x0_data[5] = phi.z;
 
+  // x0_data[0] = 0;
+  // x0_data[1] = -1;
+  // x0_data[2] = 1;
+  // // Body velocity error, [m/s]                          
+  // x0_data[6] = 0;
+  // x0_data[7] = 1;
+  // x0_data[8] = 2;
+  // // Angular rate error, [rad/s]
+  // x0_data[9]  = 0.1;   
+  // x0_data[10] = 0.2;
+  // x0_data[11] = 0.1;
+  // attitude = mkquat(
+  //   state->attitudeQuaternion.x,
+  //   state->attitudeQuaternion.y,
+  //   state->attitudeQuaternion.z,
+  //   state->attitudeQuaternion.w);  // current attitude
+  // phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
+  // // Attitude error
+  // x0_data[3] = 0;
+  // x0_data[4] = -0.1;
+  // x0_data[5] = 0.1;
+  
   /* MPC solve */
   
   // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
@@ -307,6 +328,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   DEBUG_PRINT("%d %d %d %d \n", step, info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("%d\n", mpcTime);
   // DEBUG_PRINT("[%.2f, %.2f, %.2f]\n", (double)(x0_data[0]), (double)(x0_data[1]), (double)(x0_data[2]));
+  // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f\n", (double)((Xref[0].data)[5]), (double)(U[0].data[2]), (double)(U[0].data[3]), (double)(ZU_new[0].data[0]));
 
   /* Output control */
   if (setpoint->mode.z == modeDisable) {
