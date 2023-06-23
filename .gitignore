@@ -48,3 +48,6 @@ build/
 *.elf
 
 .vscode/
+vendor/CMSIS
+.gitignore
+vendor/FreeRTOS
