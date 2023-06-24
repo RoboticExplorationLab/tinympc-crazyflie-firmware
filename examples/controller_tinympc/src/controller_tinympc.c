@@ -71,8 +71,8 @@ void appMain() {
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 #include "params_500hz.h"
-// #include "traj_fig8_12.h"
-#include "traj_circle_500hz.h"
+#include "traj_fig8_12.h"
+// #include "traj_circle_500hz.h"
 
 /* Allocate global variables for MPC */
 static float f_data[NSTATES] = {0};
@@ -129,7 +129,7 @@ static uint32_t step = 0;
 static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 2;  // hold current trajectory for this no of steps
+static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 

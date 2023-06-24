@@ -91,7 +91,8 @@ void appMain() {
 using namespace Eigen;
 
 // #include "traj_fig8_12.h"
-#include "traj_circle_500hz.h"
+// #include "traj_circle_500hz.h"
+#include "traj_perching.h"
 
 // Precomputed data and cache
 static MatrixNf A;
@@ -150,7 +151,7 @@ static uint32_t step = 0;
 static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 2;  // hold current trajectory for this no of steps
+static int8_t traj_hold = 1;  // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 
@@ -301,7 +302,7 @@ R <<
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 10;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 5e-2;
@@ -393,27 +394,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   x0(4) = phi.y;
   x0(5) = phi.z;
 
-  // x0(0) = 0;
-  // x0(1) = -1;
-  // x0(2) = 1;
-  // // Body velocity error, [m/s]                          
-  // x0(6) = 0;
-  // x0(7) = 1;
-  // x0(8) = 2;
-  // // Angular rate error, [rad/s]
-  // x0(9)  = 0.1;   
-  // x0(10) = 0.2;
-  // x0(11) = 0.1;
-  // attitude = mkquat(
-  //   state->attitudeQuaternion.x,
-  //   state->attitudeQuaternion.y,
-  //   state->attitudeQuaternion.z,
-  //   state->attitudeQuaternion.w);  // current attitude
-  // phi = quat2rp(qnormalize(attitude));  // quaternion to Rodriquez parameters  
-  // // Attitude error
-  // x0(3) = 0;
-  // x0(4) = -0.1;
-  // x0(5) = 0.1;
   /* MPC solve */
   
   // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
