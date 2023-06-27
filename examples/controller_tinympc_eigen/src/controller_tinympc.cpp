@@ -70,13 +70,13 @@ void appMain() {
 
 // Macro variables, model dimensions in tinympc/types.h
 #define DT 0.002f       // dt
-#define NHORIZON 7   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 10   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
-// #include "traj_fig8_12.h"
+#include "traj_fig8_12.h"
 // #include "traj_circle_500hz.h"
-#include "traj_perching.h"
+// #include "traj_perching.h"
 
 // Precomputed data and cache, in params_*.h
 static MatrixNf A;
@@ -128,11 +128,11 @@ static tiny_AdmmWorkspace work;
 static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover = 0.67f;
+static float u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
-static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data) / NSTATES;
+static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data);
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
 static int8_t traj_hold = 1;       // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
@@ -168,22 +168,22 @@ void updateInitialState(const sensorData_t *sensors, const state_t *state) {
 
 void updateHorizonReference(const setpoint_t *setpoint) {
   // Update reference: from stored trajectory or commander
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[(traj_idx + i)*NSTATES + j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[(traj_idx + i)*NINPUTS + j];
-          }          
-        }
-      }
-    }
-  }
-  else {
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < NSTATES; ++j) {
+  //         Xref[i](j) = X_ref_data[traj_idx][j];
+  //       }
+  //       // if (i < NHORIZON - 1) {
+  //       //   for (int j = 0; j < NINPUTS; ++j) {
+  //       //     Uref[i](j) = U_ref_data[traj_idx][j];
+  //       //   }          
+  //       // }
+  //     }
+  //   }
+  // }
+  // else {
     xg(0)  = setpoint->position.x;
     xg(1)  = setpoint->position.y;
     xg(2)  = setpoint->position.z;
@@ -202,10 +202,10 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     xg(4) = phi.y;
     xg(5) = phi.z;
     tiny_SetGoalState(&work, Xref, &xg);
-    tiny_SetGoalInput(&work, Uref, &ug);
-    // xg(1) = 1.0;
-    // xg(2) = 2.0;
-  }
+    // tiny_SetGoalInput(&work, Uref, &ug);
+    // // xg(1) = 1.0;
+    // // xg(2) = 2.0;
+  // }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   //// stop trajectory executation
@@ -240,17 +240,17 @@ void controllerOutOfTreeInit(void) {
   tiny_InitSolution(&work, Xhrz, Uhrz, 0, YU, 0, &Kinf, d, &Pinf, p);
 
   tiny_SetInitialState(&work, &x0);  
-  tiny_SetStateReference(&work, Xref);
-  tiny_SetInputReference(&work, Uref);
-  // tiny_SetGoalState(&work, Xref, &xg);
-  // tiny_SetGoalInput(&work, Uref, &ug);
+  // tiny_SetStateReference(&work, Xref);
+  // tiny_SetInputReference(&work, Uref);
+  tiny_SetGoalState(&work, Xref, &xg);
+  tiny_SetGoalInput(&work, Uref, &ug);
 
   /* Set up LQR cost */
   tiny_InitDataCost(&work, &Q, q, &R, r, r_tilde);
   // R = R + stgs.rho_init * MatrixMf::Identity();
   // /* Set up constraints */
-  ucu.fill(1 - u_hover);
-  lcu.fill(-u_hover);
+  ucu << 1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3];
+  lcu << -u_hover[0], -u_hover[1], -u_hover[2], -u_hover[3];
   tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
 
   tiny_UpdateLinearCost(&work);
@@ -259,9 +259,9 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 8;           // limit this if needed
+  stgs.max_iter = 4;           // limit this if needed
   stgs.verbose = 0;
-  stgs.check_termination = 2;
+  stgs.check_termination = 0;
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
@@ -309,8 +309,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-  // result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  result =  info.status_val * info.iter;
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f \n", (double)(Xref[0](5)), (double)(Uhrz[0](2)), (double)(Uhrz[0](3)), (double)(ZU_new[0](0)));
   
   /* Output control */
@@ -320,10 +320,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = 0.0f;
     control->normalizedForces[3] = 0.0f;
   } else {
-    control->normalizedForces[0] = ZU_new[0](0) + u_hover;  // PWM 0..1
-    control->normalizedForces[1] = ZU_new[0](1) + u_hover;
-    control->normalizedForces[2] = ZU_new[0](2) + u_hover;
-    control->normalizedForces[3] = ZU_new[0](3) + u_hover;
+    control->normalizedForces[0] = ZU_new[0](0) + u_hover[0];  // PWM 0..1
+    control->normalizedForces[1] = ZU_new[0](1) + u_hover[1];
+    control->normalizedForces[2] = ZU_new[0](2) + u_hover[2];
+    control->normalizedForces[3] = ZU_new[0](3) + u_hover[3];
   } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
@@ -353,22 +353,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
 LOG_GROUP_START(ctrlMPC)
 
-LOG_ADD(LOG_FLOAT, x, &(x0(0)))
-LOG_ADD(LOG_FLOAT, y, &(x0(1)))
-LOG_ADD(LOG_FLOAT, z, &(x0(2)))
-
-LOG_ADD(LOG_FLOAT, roll,  &(x0(3)))
-LOG_ADD(LOG_FLOAT, pitch, &(x0(4)))
-LOG_ADD(LOG_FLOAT, yaw,   &(x0(5)))
-
-LOG_ADD(LOG_FLOAT, vx, &(x0(6)))
-LOG_ADD(LOG_FLOAT, vy, &(x0(7)))
-LOG_ADD(LOG_FLOAT, vz, &(x0(8)))
-
-LOG_ADD(LOG_FLOAT, wroll,  &(x0(9)))
-LOG_ADD(LOG_FLOAT, wpitch, &(x0(10)))
-LOG_ADD(LOG_FLOAT, wyaw,   &(x0(11)))
-
 LOG_ADD(LOG_INT8, result, &result)
 LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
@@ -377,10 +361,10 @@ LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
 LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
 LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
 
-LOG_ADD(LOG_FLOAT, yu0, &(YU[0](0)))
-LOG_ADD(LOG_FLOAT, yu1, &(YU[0](1)))
-LOG_ADD(LOG_FLOAT, yu2, &(YU[0](2)))
-LOG_ADD(LOG_FLOAT, yu3, &(YU[0](3)))
+LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
+LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
+LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
+LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
 LOG_GROUP_STOP(ctrlMPC)
 

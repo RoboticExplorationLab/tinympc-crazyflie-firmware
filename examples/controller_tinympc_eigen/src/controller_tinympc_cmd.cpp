@@ -323,7 +323,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xg(3) = phi.x;
   xg(4) = phi.y;
   xg(5) = phi.z;
-  tiny_SetGoalState(&work, Xref, &xg);
+  tiny_SetGoalState(&work, Xref, &xg);  // always needed here
 
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
