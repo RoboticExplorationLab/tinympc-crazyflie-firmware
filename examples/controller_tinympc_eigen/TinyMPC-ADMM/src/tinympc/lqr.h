@@ -1,15 +1,15 @@
 #ifndef LQR_H
 # define LQR_H
 
-# ifdef __cplusplus
-extern "C" {
-# endif // ifdef __cplusplus
-
-
 #include "types.h"
 #include "cost_lqr.h"
 #include "model.h"
 #include "auxil.h"
+
+# ifdef __cplusplus
+extern "C" {
+# endif // ifdef __cplusplus
+
 
 enum tiny_ErrorCode tiny_ForwardPass(tiny_AdmmWorkspace* work);
 
