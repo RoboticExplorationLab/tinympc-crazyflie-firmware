@@ -9,30 +9,34 @@
 # endif ()
 
 add_library(tinympc
-  constants.h 
+  tinympc.h
+
+  constants.h
+
+  errors.h
   
   utils.h
-  utils.c
+  utils.cpp
 
   types.h
 
   model.h
-  model.c
+  model.cpp
 
   auxil.h
-  auxil.c
+  auxil.cpp
   
   cost_lqr.h
-  cost_lqr.c
+  cost_lqr.cpp
 
   lqr.h
-  lqr.c
+  lqr.cpp
 
   constraint_linear.h
-  constraint_linear.c
+  constraint_linear.cpp
 
   admm.h
-  admm.c
+  admm.cpp
   )
 
 target_include_directories(tinympc
@@ -43,7 +47,7 @@ target_include_directories(tinympc
 
 target_link_libraries(tinympc
   PRIVATE
-  slap::slap
+
   )
 
 add_library(tinympc::tinympc ALIAS tinympc)

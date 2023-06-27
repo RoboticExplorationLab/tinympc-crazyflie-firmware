@@ -1,15 +1,18 @@
 #ifndef UTILS_H
 # define UTILS_H
 
-# ifdef __cplusplus
-extern "C" {
-# endif // ifdef __cplusplus
+#include <iostream>
+#include <Eigen.h>
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "types.h"
 #include "constants.h"
+
+# ifdef __cplusplus
+extern "C" {
+# endif // ifdef __cplusplus
 
 void PrintLine(void);
 
@@ -36,13 +39,13 @@ void PrintSummary(tiny_AdmmInfo *info);
 #define PrintMatrix(mat)      \
   {                          \
     printf("%s = \n", #mat); \
-    slap_PrintMatrix(mat);   \
+    std::cout << mat << std::endl;   \
   }
 
 #define PrintMatrixT(mat)                   \
   {                                        \
     printf("%s = \n", #mat);               \
-    slap_PrintMatrix(slap_Transpose(mat)); \
+    std::cout << (mat).transpose() << std::endl;  \
   }
 
 //========================================
@@ -87,12 +90,9 @@ void PrintSummary(tiny_AdmmInfo *info);
 #define PrintMatrixInfo(mat)      \
   {                          \
     printf("%s info: \n", #mat); \
-    printf(" Dims: (%d, %d)\n", mat.rows, mat.cols);   \
+    printf(" Dims: (%d, %d)\n", mat.rows(), mat.cols());   \
     printf(" Data: "); \
-    for (int imat = 0; imat < mat.cols * mat.rows; ++imat) { \
-      printf("%.4f, ", mat.data[imat]); \
-    } \
-    printf("\n");\
+    std::cout << mat << std::endl; \
   }
 
 //========================================
@@ -110,49 +110,44 @@ void PrintSolveInfo(tiny_AdmmWorkspace* work);
 // //========================================
 // // Read data from file
 // //========================================
-// int tiny_ReadData(const char* filename, sfloat* des, const int size,
+// int tiny_ReadData(const char* filename, float* des, const int size,
 //                   bool verbose);
 
 // //========================================
 // // Read data from file and copy the last knot point into
 // // remaining space of the array. Useful for extend horizon at the end.
 // //========================================
-// int tiny_ReadData_Extend(const char* filename, sfloat* des, const int stride,
+// int tiny_ReadData_Extend(const char* filename, float* des, const int stride,
 //                          const int size, bool verbose);
 
 // //========================================
 // // Read data from file and copy the goal state into
 // // remaining space of the array. Useful for extend horizon at the end.
 // //========================================
-// int tiny_ReadData_ExtendGoal(const char* filename, sfloat* des,
-//                              const sfloat* xf, const int stride, const int size,
+// int tiny_ReadData_ExtendGoal(const char* filename, float* des,
+//                              const float* xf, const int stride, const int size,
 //                              bool verbose);
 
 // //========================================
 // // Clamp the inputs to within min max value,
 // // will modify the provided array
 // //========================================
-void tiny_Clamps(sfloat* arr, const sfloat* min, const sfloat* max,
-                 const int N);
+// void tiny_Clamps(float* arr, const float* min, const float* max,
+//                  const int N);
 
-void tiny_Clamp(sfloat* arr, const sfloat min, const sfloat max, const int N);
+// void tiny_Clamp(float* arr, const float min, const float max, const int N);
 
-void tiny_ClampMatrix(Matrix* mat, const Matrix min, const Matrix max);
+// void tiny_ClampMatrix(Matrix* mat, const Matrix min, const Matrix max);
 
-void tiny_ShiftFill(Matrix* mats, const int length);
+// void tiny_ShiftFill(Matrix* mats, const int length);
 
-void tiny_ShiftFillWith(Matrix* mats, const sfloat* x, const int length);
+// void tiny_ShiftFillWith(Matrix* mats, const float* x, const int length);
 
 
 //========================================
 // Raw matrix operators, ignore all metadata
 //========================================
-void SwapVectors(sfloat **a, sfloat **b);
-void MatAdd(Matrix C, Matrix A, Matrix B, sfloat alpha);
-void MatCpy(Matrix des, Matrix src);
-void MatScale(Matrix A, sfloat alpha);
-void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
-void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta);
+void SwapVectors(float **a, float **b);
 
 # ifdef __cplusplus
 }

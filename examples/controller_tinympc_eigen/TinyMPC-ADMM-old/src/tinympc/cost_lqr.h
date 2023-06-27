@@ -1,13 +1,12 @@
 #ifndef COST_LQR_H
 # define COST_LQR_H
 
+#include "types.h"
+#include "utils.h"
+
 # ifdef __cplusplus
 extern "C" {
 # endif // ifdef __cplusplus
-
-
-#include "types.h"
-#include "utils.h"
 
 enum tiny_ErrorCode tiny_AddStageCost(tiny_AdmmWorkspace* work, const int k);
 
