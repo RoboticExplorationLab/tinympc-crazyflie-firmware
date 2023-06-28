@@ -71,19 +71,17 @@ void appMain() {
 // Macro variables, model dimensions in tinympc/types.h
 #define DT 0.002f       // dt
 #define NHORIZON 25   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_100_HZ  // control frequency
-#define LQR_RATE RATE_500_HZ  // control frequency
+#define MPC_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
 // #include "traj_fig8_12.h"
-#include "traj_circle_500hz.h"
-// #include "traj_perching.h"
+// #include "traj_circle_500hz.h"
+#include "traj_perching.h"
 
 // Precomputed data and cache, in params_*.h
 static MatrixNf A;
 static MatrixNMf B;
 static MatrixMNf Kinf;
-static MatrixMNf Klqr;
 static MatrixNf Pinf;
 static MatrixMf Quu_inv;
 static MatrixNf AmBKt;
@@ -95,7 +93,6 @@ static MatrixMf R;
 
 static VectorNf Xhrz[NHORIZON];
 static VectorMf Uhrz[NHORIZON-1]; 
-static VectorMf Ulqr;
 static VectorMf d[NHORIZON-1];
 static VectorNf p[NHORIZON];
 static VectorMf YU[NHORIZON];
@@ -171,23 +168,23 @@ void updateInitialState(const sensorData_t *sensors, const state_t *state) {
 }
 
 void updateHorizonReference(const setpoint_t *setpoint) {
-  // Update reference: from stored trajectory or commander
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[traj_idx][j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[traj_idx][j];
-          }          
-        }
-      }
-    }
-  }
-  else {
+  //// Update reference: from stored trajectory or commander
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < NSTATES; ++j) {
+  //         Xref[i](j) = X_ref_data[traj_idx][j];
+  //       }
+  //       if (i < NHORIZON - 1) {
+  //         for (int j = 0; j < NINPUTS; ++j) {
+  //           Uref[i](j) = U_ref_data[traj_idx][j];
+  //         }          
+  //       }
+  //     }
+  //   }
+  // }
+  // else {
     xg(0)  = setpoint->position.x;
     xg(1)  = setpoint->position.y;
     xg(2)  = setpoint->position.z;
@@ -206,31 +203,30 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     xg(4) = phi.y;
     xg(5) = phi.z;
     tiny_SetGoalState(&work, Xref, &xg);
-    tiny_SetGoalInput(&work, Uref, &ug);
+    // tiny_SetGoalInput(&work, Uref, &ug);
     // // xg(1) = 1.0;
     // // xg(2) = 2.0;
-  }
+  // }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
-  // stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
+  //// stop trajectory executation
+  // if (en_traj) {
+  //   if (traj_iter >= user_traj_iter) en_traj = false;
 
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
+  //   if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
+  //     // complete one trajectory
+  //     step = 0; 
+  //     traj_iter += 1;
+  //   } 
+  //   else step += 1;
+  // }
 }
 
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
 
   // Precompute/Cache
-  // #include "params_500hz.h"
-  #include "params_100hz.h"
+  #include "params_500hz.h"
 
   // End of Precompute/Cache
 
@@ -270,12 +266,6 @@ void controllerOutOfTreeInit(void) {
   stgs.tol_abs_dual = 5e-2;
   stgs.tol_abs_prim = 5e-2;
 
-  Klqr << 
-  -0.123589f,0.123635f,0.285625f,-0.394876f,-0.419547f,-0.474536f,-0.073759f,0.072612f,0.186504f,-0.031569f,-0.038547f,-0.187738f,
-  0.120236f,0.119379f,0.285625f,-0.346222f,0.403763f,0.475821f,0.071330f,0.068348f,0.186504f,-0.020972f,0.037152f,0.187009f,
-  0.121600f,-0.122839f,0.285625f,0.362241f,0.337953f,-0.478858f,0.069310f,-0.070833f,0.186504f,0.022379f,0.015573f,-0.185212f,
-  -0.118248f,-0.120176f,0.285625f,0.378857f,-0.322169f,0.477573f,-0.066881f,-0.070128f,0.186504f,0.030162f,-0.014177f,0.185941f;
-
   /* End of MPC initialization */  
   en_traj = true;
   step = 0;  
@@ -288,58 +278,62 @@ bool controllerOutOfTreeTest() {
 }
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
+
+  /* Controller rate */
+  if (!RATE_DO_EXECUTE(MPC_RATE, tick)) {
+    return;
+  }
   // Get current time
   startTimestamp = usecTimestamp();
-
+  updateHorizonReference(setpoint);
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
   // Positon error, [m]
   updateInitialState(sensors, state);
 
-  /* Controller rate */
-  if (RATE_DO_EXECUTE(MPC_RATE, tick)) { 
-    // Get command reference
-    updateHorizonReference(setpoint);
+  /* MPC solve */
+  
+  // Warm-start by previous solution  // TODO: should I warm-start U with previous ZU
+  // tiny_ShiftFill(U, T_ARRAY_SIZE(U));
 
-    /* MPC solve */
-    // Solve optimization problem using ADMM
-    tiny_UpdateLinearCost(&work);
-    tiny_SolveAdmm(&work);
+  // Solve optimization problem using ADMM
+  tiny_UpdateLinearCost(&work);
+  tiny_SolveAdmm(&work);
+
+  // // JUST LQR
+  Uhrz[0] = -(Kinf) * (x0 - xg);
+
+  mpcTime = usecTimestamp() - startTimestamp;
  
-    // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
-    // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
-    // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
-    // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
-    // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-    result =  info.status_val * info.iter;
-    // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
-    // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f \n", (double)(Xref[0](5)), (double)(Uhrz[0](2)), (double)(Uhrz[0](3)), (double)(ZU_new[0](0)));
-  }
-
-  if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
-    // Reference from MPC
-    Ulqr = -(Kinf) * (x0 - Xhrz[1]) + ZU_new[0];
-    
-    /* Output control */
-    if (setpoint->mode.z == modeDisable) {
-      control->normalizedForces[0] = 0.0f;
-      control->normalizedForces[1] = 0.0f;
-      control->normalizedForces[2] = 0.0f;
-      control->normalizedForces[3] = 0.0f;
-    } else {
-      control->normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
-      control->normalizedForces[1] = Ulqr(1) + u_hover[1];
-      control->normalizedForces[2] = Ulqr(2) + u_hover[2];
-      control->normalizedForces[3] = Ulqr(3) + u_hover[3];
-    } 
-    control->controlMode = controlModePWM;
-  }
+  // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
+  // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
+  // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
+  // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
+  // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
+  result =  info.status_val * info.iter;
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f \n", (double)(Xref[0](5)), (double)(Uhrz[0](2)), (double)(Uhrz[0](3)), (double)(ZU_new[0](0)));
+  
+  /* Output control */
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
+    control->normalizedForces[0] = ZU_new[0](0) + u_hover[0];  // PWM 0..1
+    control->normalizedForces[1] = ZU_new[0](1) + u_hover[1];
+    control->normalizedForces[2] = ZU_new[0](2) + u_hover[2];
+    control->normalizedForces[3] = ZU_new[0](3) + u_hover[3];
+  } 
   // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;
   // control->normalizedForces[2] = 0.0f;
   // control->normalizedForces[3] = 0.0f;
+
+  control->controlMode = controlModePWM;
 }
 
 /**
