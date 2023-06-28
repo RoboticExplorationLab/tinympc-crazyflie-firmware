@@ -177,7 +177,7 @@ config DECK_FLAPPER_EXTRX_ENABLE
 
 config DECK_FLOW
     bool "Support the Flow (v1 and v2) deck"
-    default y
+    default n
     select ESTIMATOR_KALMAN_ENABLE
     select DECK_ZRANGER
     select DECK_ZRANGER2
@@ -383,7 +383,7 @@ config DECK_OA
 
 config DECK_USD
     bool "Support the Micro SD card deck"
-    default n
+    default y
     help
         The Micro SD card deck adds a Micro SD card reader to the Crazyflie
         and makes it possible to read and write files to the SD-card.

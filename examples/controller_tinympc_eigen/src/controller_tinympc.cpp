@@ -70,7 +70,7 @@ void appMain() {
 
 // Macro variables, model dimensions in tinympc/types.h
 #define DT 0.002f       // dt
-#define NHORIZON 5   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 15   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
@@ -169,22 +169,22 @@ void updateInitialState(const sensorData_t *sensors, const state_t *state) {
 
 void updateHorizonReference(const setpoint_t *setpoint) {
   //// Update reference: from stored trajectory or commander
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[traj_idx][j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[traj_idx][j];
-          }          
-        }
-      }
-    }
-  }
-  else {
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < NSTATES; ++j) {
+  //         Xref[i](j) = X_ref_data[traj_idx][j];
+  //       }
+  //       if (i < NHORIZON - 1) {
+  //         for (int j = 0; j < NINPUTS; ++j) {
+  //           Uref[i](j) = U_ref_data[traj_idx][j];
+  //         }          
+  //       }
+  //     }
+  //   }
+  // }
+  // else {
     xg(0)  = setpoint->position.x;
     xg(1)  = setpoint->position.y;
     xg(2)  = setpoint->position.z;
@@ -206,20 +206,20 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     // tiny_SetGoalInput(&work, Uref, &ug);
     // // xg(1) = 1.0;
     // // xg(2) = 2.0;
-  }
+  // }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   //// stop trajectory executation
-  if (en_traj) {
-    if (traj_iter >= user_traj_iter) en_traj = false;
+  // if (en_traj) {
+  //   if (traj_iter >= user_traj_iter) en_traj = false;
 
-    if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
-      // complete one trajectory
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
+  //   if (traj_idx >= traj_length - 1 - NHORIZON + 1) { 
+  //     // complete one trajectory
+  //     step = 0; 
+  //     traj_iter += 1;
+  //   } 
+  //   else step += 1;
+  // }
 }
 
 void controllerOutOfTreeInit(void) { 
