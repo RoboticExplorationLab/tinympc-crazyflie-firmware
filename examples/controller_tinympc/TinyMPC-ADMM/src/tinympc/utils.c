@@ -1,5 +1,11 @@
 #include "utils.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// #include "slap/slap.h"
+
 // void PrintSolveInfo(tiny_AdmmWorkspace* work) {
 //   tiny_AdmmInfo* info = work->info;
 //   printf("Solve info: \n");
@@ -55,7 +61,7 @@
 // //========================================
 // // Read data from file
 // //========================================
-// int tiny_ReadData(const char* filename, sfloat* des, const int size,
+// int tiny_ReadData(const char* filename, float* des, const int size,
 //                   bool verbose) {
 //   FILE* input;
 //   int i;
@@ -87,7 +93,7 @@
 //     return EXIT_FAILURE;
 //   }
 
-//   if (verbose == true) printf("All sfloats read successfully.\n");
+//   if (verbose == true) printf("All floats read successfully.\n");
 
 //   return EXIT_SUCCESS;
 // }
@@ -96,7 +102,7 @@
 // // Read data from file and copy the last knot point into
 // // remaining space of the array. Useful for extend horizon at the end.
 // //========================================
-// int tiny_ReadData_Extend(const char* filename, sfloat* des, const int stride,
+// int tiny_ReadData_Extend(const char* filename, float* des, const int stride,
 //                          const int size, bool verbose) {
 //   FILE* input;
 //   int i;
@@ -121,7 +127,7 @@
 //   }
 
 //   if (verbose == true)
-//     printf("All sfloats read successfully and now extend.\n");
+//     printf("All floats read successfully and now extend.\n");
 
 //   int remain_cnt = (size - k) / stride;  // # of remaining chunks
 //   for (i = 0; i < remain_cnt; i += 1) {
@@ -137,8 +143,8 @@
 // // Read data from file and copy the goal state into
 // // remaining space of the array. Useful for extend horizon at the end.
 // //========================================
-// int tiny_ReadData_ExtendGoal(const char* filename, sfloat* des,
-//                              const sfloat* xf, const int stride, const int size,
+// int tiny_ReadData_ExtendGoal(const char* filename, float* des,
+//                              const float* xf, const int stride, const int size,
 //                              bool verbose) {
 //   FILE* input;
 //   int i;
@@ -163,7 +169,7 @@
 //   }
 
 //   if (verbose == true)
-//     printf("All sfloats read successfully and now extend.\n");
+//     printf("All floats read successfully and now extend.\n");
 
 //   int remain_cnt = (size - k) / stride;  // # of remaining chunks
 //   for (i = 0; i < remain_cnt; i += 1) {
@@ -178,14 +184,14 @@
 //========================================
 // Clamp the inputs to within min max value
 //========================================
-void tiny_Clamps(sfloat* arr, const sfloat* min, const sfloat* max,
+void tiny_Clamps(float* arr, const float* min, const float* max,
                  const int N) {
   for (int k = 0; k < N; ++k) {
     arr[k] = (arr[k] > max[k]) ? max[k] : ((arr[k] < min[k]) ? min[k] : arr[k]);
   }
 }
 
-void tiny_Clamp(sfloat* arr, const sfloat min, const sfloat max, const int N) {
+void tiny_Clamp(float* arr, const float min, const float max, const int N) {
   for (int k = 0; k < N; ++k) {
     arr[k] = (arr[k] > max) ? max : ((arr[k] < min) ? min : arr[k]);
   }
@@ -203,46 +209,55 @@ void tiny_ShiftFill(Matrix* mats, const int length) {
   slap_Copy(mats[length - 1], mats[length - 2]);
 }
 
-void tiny_ShiftFillWith(Matrix* mats, const sfloat* x, const int length) {
+void tiny_ShiftFillWith(Matrix* mats, const float* x, const int length) {
   for (int k = 0; k < length - 1; ++k) {
     slap_Copy(mats[k], mats[k + 1]);
   }
   slap_CopyFromArray(mats[length - 1], x);
 }
 
-void SwapVectors(sfloat **a, sfloat **b) {
-  sfloat *temp;
+void SwapVectors(float **a, float **b) {
+  float *temp;
 
   temp = *b;
   *b   = *a;
   *a   = temp;
 }
 
-void MatAdd(Matrix C, Matrix A, Matrix B, sfloat alpha) {
+void MatAdd(Matrix C, Matrix A, Matrix B, float alpha) {
   for (int i = 0; i < C.cols * C.rows; ++i) {
     C.data[i] = A.data[i] + B.data[i] * alpha;
   }
+  // if (alpha == 1.0f) {
+  //   arm_matrix_instance_f32 C_ = {C.rows, C.cols, (float32_t *)(C.data)};
+  //   arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
+  //   arm_matrix_instance_f32 B_ = {B.rows, B.cols, (float32_t *)(B.data)};
+  //   arm_mat_add_f32(&A_, &B_, &C_);
+  // }
 }
 
 void MatCpy(Matrix des, Matrix src) {
   for (int i = 0; i < des.cols * des.rows; ++i) {
     des.data[i] = src.data[i];
   }
+  // arm_copy_f32((float32_t *)(src.data), (float32_t *)(des.data), des.cols * des.rows);
 }
 
-void MatScale(Matrix A, sfloat alpha) {
+void MatScale(Matrix A, float alpha) {
   for (int i = 0; i < A.cols * A.rows; ++i) {
     A.data[i] = A.data[i] * alpha;
   }
+  // arm_matrix_instance_f32 A_ = {A.rows, A.cols, (float32_t *)(A.data)};
+  // mat_scale(&A_, alpha, &A_);
 }
 
-void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
+void MatMulAdd(Matrix C, Matrix A, Matrix B, float alpha, float beta) {
   int n = A.rows;
-  int m = A.cols;
+  int m = A.cols; 
   int p = B.cols;
-  sfloat Aik;
-  sfloat Bkj;
-  sfloat Cij;
+  float Aik;
+  float Bkj;
+  float Cij;
   int ij;
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < p; ++j) {
@@ -256,15 +271,27 @@ void MatMulAdd(Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
       C.data[ij] = alpha * Cij + beta * C.data[ij];
     }
   }
+
+  // int n = A.rows;
+  // int m = A.cols;  // = B.rows
+  // int p = B.cols;
+
+  // Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m) 
+  //     * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p);
+  // Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * (Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
 }
 
-void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat beta) {
+void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, float alpha, float beta) {
   int n = A.rows;
   int m = A.cols;
   int p = B.cols;
-  sfloat Aik;
-  sfloat Bkj;
-  sfloat Cij;
+  float Aik;
+  float Bkj;
+  float Cij;
   int ij;
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < p; ++j) {
@@ -278,4 +305,19 @@ void MatMulAdd2(Matrix D, Matrix C, Matrix A, Matrix B, sfloat alpha, sfloat bet
       D.data[ij] = alpha * Cij + beta * C.data[ij];
     }
   }
+  // int n = A.rows;
+  // int m = A.cols;  // = B.rows
+  // int p = B.cols;
+
+  // Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(D.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m) 
+  //     * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p);
+  // Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(D.data, n, p) = 
+  //     beta * Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(C.data, n, p)
+  //     + alpha * (Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(A.data, n, m)).lazyProduct(Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>>(B.data, m, p));
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

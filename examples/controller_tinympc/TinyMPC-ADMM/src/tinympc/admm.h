@@ -29,7 +29,7 @@ enum tiny_ErrorCode UpdateInfo(tiny_AdmmWorkspace* work,
                                 int                 iter,
                                 int                 compute_objective);
 
-enum tiny_ErrorCode tiny_WarmStartInput(tiny_AdmmWorkspace* work, sfloat* U_data);
+enum tiny_ErrorCode tiny_WarmStartInput(tiny_AdmmWorkspace* work, float* U_data);
 
 # ifdef __cplusplus
 }

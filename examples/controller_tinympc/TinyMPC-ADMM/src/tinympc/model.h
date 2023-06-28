@@ -11,7 +11,7 @@ extern "C" {
 enum tiny_ErrorCode tiny_InitModel(tiny_Model* model, const int nstates,
                                    const int ninputs, const int nhorizon,
                                    const int ltv, const int affine, 
-                                   const sfloat dt);
+                                   const float dt);
 
 // User provides array of slap matrices
 enum tiny_ErrorCode tiny_InitModelDataMatrix(tiny_Model* model, 
@@ -19,14 +19,14 @@ enum tiny_ErrorCode tiny_InitModelDataMatrix(tiny_Model* model,
 
 // User provides matrix as column-major array
 enum tiny_ErrorCode tiny_InitModelFromArray(tiny_Model* model, Matrix* A, 
-    Matrix* B, Matrix* f, sfloat* A_array, sfloat* B_array, sfloat* f_array);
+    Matrix* B, Matrix* f, float* A_array, float* B_array, float* f_array);
 
 enum tiny_ErrorCode tiny_InitModelMemory(tiny_Model* model, Matrix* mats,
-    sfloat* data);
+    float* data);
 
 // Used after tiny_InitLtvModelMemory and before tiny_UpdateLtvModelJac
-enum tiny_ErrorCode tiny_FillModelMemory(tiny_Model* model, sfloat* A_data, 
-sfloat* B_data, sfloat* f_data);
+enum tiny_ErrorCode tiny_FillModelMemory(tiny_Model* model, float* A_data, 
+float* B_data, float* f_data);
 
 enum tiny_ErrorCode tiny_SetModelJacFunc(
     tiny_Model* model, 

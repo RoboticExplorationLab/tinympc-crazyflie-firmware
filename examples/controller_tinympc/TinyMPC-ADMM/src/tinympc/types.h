@@ -18,7 +18,7 @@ typedef struct {
 
   int ltv;            ///< Boolean, true if model is LTV  
   int affine;         ///< Boolean, true if model is affine
-  sfloat dt;          ///< Sample time Ts of the discrete model
+  float dt;          ///< Sample time Ts of the discrete model
 
   Matrix* A;
   Matrix* B;
@@ -57,9 +57,9 @@ typedef struct {
   int iter_riccati;   ///< Number of Riccati iterations taken
   int status_val;     ///< Integer, status defined in constants.h
 
-  sfloat obj_val;     ///< primal objective
-  sfloat pri_res;     ///< norm of primal residual
-  sfloat dua_res;     ///< norm of dual residual
+  float obj_val;     ///< primal objective
+  float pri_res;     ///< norm of primal residual
+  float dua_res;     ///< norm of dual residual
 } tiny_AdmmInfo;
 
 
@@ -71,23 +71,23 @@ typedef struct {
  * Settings struct
  */
 typedef struct {
-  sfloat reg_min;             ///< Minimum regularization
-  sfloat reg_max;             ///< Maximum regularization
-  sfloat reg_mul;             ///< Regularization update multiplier
+  float reg_min;             ///< Minimum regularization
+  float reg_max;             ///< Maximum regularization
+  float reg_mul;             ///< Regularization update multiplier
   int    en_reg_update;       ///< Boolean, enable regularization update (tighter solve)
   
-  sfloat rho_init;            ///< Initial rho
-  sfloat rho_max;             ///< Maximum rho
-  sfloat rho_mul;             ///< Penalty multiplier
+  float rho_init;            ///< Initial rho
+  float rho_max;             ///< Maximum rho
+  float rho_mul;             ///< Penalty multiplier
 
-  sfloat alpha_mul;           ///< Line-search step multiplier
+  float alpha_mul;           ///< Line-search step multiplier
 
   int    max_iter;            ///< Maximum number of AL iterations
   int    max_iter_riccati;    ///< Maximum number of Riccati solve iterations
   int    max_iter_ls;         ///< Maximum number of line-search iterations
 
-  sfloat tol_abs_prim;        ///< Riccati solve tolerance
-  sfloat tol_abs_dual;        ///< Constraint tolerance
+  float tol_abs_prim;        ///< Riccati solve tolerance
+  float tol_abs_dual;        ///< Constraint tolerance
 
   int    en_cstr_states;      ///< Boolean, enable inequality constraints on states
   int    en_cstr_inputs;      ///< Boolean, enable inequality constraints on inputs
@@ -98,7 +98,7 @@ typedef struct {
   int    check_riccati;       ///< Boolean, if 0, then termination checking is disabled
   int    check_termination;   ///< Integer, check termination interval; if 0, then termination checking is disabled
   int    warm_start;          ///< boolean, enable warm start
-  sfloat time_limit;          ///< Time limit of each MPC step; if 0, disabled
+  float time_limit;          ///< Time limit of each MPC step; if 0, disabled
 } tiny_AdmmSettings;
 
 // void tiny_InitSettings(tiny_AdmmSettings* solver);
@@ -138,9 +138,9 @@ typedef struct {
   tiny_AdmmSolution*    soln;      ///< problem solution
   tiny_AdmmInfo*        info;      ///< solver information
 
-  sfloat reg;
-  sfloat alpha;
-  sfloat rho;
+  float reg;
+  float alpha;
+  float rho;
 
   // Temporary data
   Matrix Qu;          ///< temporary 

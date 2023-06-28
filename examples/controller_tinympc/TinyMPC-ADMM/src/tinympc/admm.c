@@ -177,7 +177,7 @@ enum tiny_ErrorCode UpdateInfo(tiny_AdmmWorkspace* work,
   return TINY_NO_ERROR;
 }
 
-enum tiny_ErrorCode tiny_WarmStartInput(tiny_AdmmWorkspace* work, sfloat* U_data) {
+enum tiny_ErrorCode tiny_WarmStartInput(tiny_AdmmWorkspace* work, float* U_data) {
   int N = work->data->model->nhorizon;
   int m = work->data->model->ninputs;
   for (int i = 0; i < N - 1; ++i) {
