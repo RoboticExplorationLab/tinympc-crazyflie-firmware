@@ -36,14 +36,18 @@ using namespace Eigen;
 extern "C" {
 #endif
 
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
-
 #include "app.h"
 
 #include "FreeRTOS.h"
+#include "queue.h"
 #include "task.h"
+#include "semphr.h"
+#include "sensors.h"
+#include "static_mem.h"
+#include "string.h"
+#include "stdint.h"
+#include "stdbool.h"
+#include "system.h"
 
 #include "controller.h"
 #include "physicalConstants.h"
@@ -68,11 +72,19 @@ void appMain() {
   }
 }
 
+static SemaphoreHandle_t runTaskSemaphore;
+static SemaphoreHandle_t dataMutex;
+static StaticSemaphore_t dataMutexBuffer;
+
+static void tinympcControllerTask(void* parameters);
+
+STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
+
 // Macro variables, model dimensions in tinympc/types.h
 #define DT 0.002f       // dt
 #define NHORIZON 25   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_100_HZ  // control frequency
-#define LQR_RATE RATE_500_HZ  // control frequency
+#define MPC_RATE RATE_500_HZ  // control frequency
+// #define LQR_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
 // #include "traj_fig8_12.h"
@@ -145,6 +157,20 @@ static uint32_t traj_idx = 0;
 static struct vec desired_rpy;
 static struct quat attitude;
 static struct vec phi;
+
+// Structs to keep track of data sent to and received by stabilizer loop
+
+// Updates at 1khz
+control_t control_data;
+setpoint_t setpoint_data;
+sensorData_t sensors_data;
+state_t state_data;
+
+// Updates at update_rate
+setpoint_t setpoint_task;
+sensorData_t sensors_task;
+state_t state_task;
+control_t control_task;
 
 void updateInitialState(const sensorData_t *sensors, const state_t *state) {
   x0(0) = state->position.x;
@@ -227,7 +253,9 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
-
+  if (isInit) {
+    return;
+  }
   // Precompute/Cache
   // #include "params_500hz.h"
   #include "params_100hz.h"
@@ -280,6 +308,19 @@ void controllerOutOfTreeInit(void) {
   en_traj = true;
   step = 0;  
   traj_iter = 0;
+
+ /* Start task initialization */
+
+  runTaskSemaphore = xSemaphoreCreateBinary();
+  ASSERT(runTaskSemaphore);
+
+  dataMutex = xSemaphoreCreateMutexStatic(&dataMutexBuffer);
+
+  STATIC_MEM_TASK_CREATE(tinympcControllerTask, tinympcControllerTask, TINYMPC_TASK_NAME, NULL, TINYMPC_TASK_PRI);
+
+  isInit = true;
+
+  /* End of task initialization */
 }
 
 bool controllerOutOfTreeTest() {
@@ -287,59 +328,68 @@ bool controllerOutOfTreeTest() {
   return true;
 }
 
+static void tinympcControllerTask(void* parameters) {
+  systemWaitStart();
+
+  uint32_t nowMs = T2M(xTaskGetTickCount());
+  uint32_t nextPredictionMs = nowMs;
+
+  uint64_t startTimestamp = usecTimestamp();
+
+  while (true) {
+    // Update task data with most recent stabilizer loop data
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
+    memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
+    memcpy(&state_task, &state_data, sizeof(state_t));
+    memcpy(&control_task, &control_data, sizeof(control_t));
+    xSemaphoreGive(dataMutex);
+
+    xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
+    nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
+
+    /* Controller rate */
+    if (nowMs >= nextPredictionMs) {
+      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
+      updateHorizonReference(&setpoint_task);
+      updateInitialState(&sensors_task, &state_task);
+      tiny_UpdateLinearCost(&work);
+      tiny_SolveAdmm(&work);
+      /* Output control */
+      if (setpoint_task.mode.z == modeDisable) {
+        control_task.normalizedForces[0] = 0.0f;
+        control_task.normalizedForces[1] = 0.0f;
+        control_task.normalizedForces[2] = 0.0f;
+        control_task.normalizedForces[3] = 0.0f;
+      } else {
+        control_task.normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
+        control_task.normalizedForces[1] = Ulqr(1) + u_hover[1];
+        control_task.normalizedForces[2] = Ulqr(2) + u_hover[2];
+        control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
+      } 
+      control_task.controlMode = controlModePWM;
+    }
+
+    // Copy the controls calculated by the task loop to the global control_data
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    memcpy(&control_data, &control_task, sizeof(control_t));
+    xSemaphoreGive(dataMutex);
+  } 
+}
+
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
-  // Get current time
-  startTimestamp = usecTimestamp();
+  // This function is called from the stabilizer loop. It is important that this call returns
+  // as quickly as possible. The dataMutex must only be locked short periods by the task.
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+  memcpy(&setpoint_data, setpoint, sizeof(setpoint_t));
+  memcpy(&sensors_data, sensors, sizeof(sensorData_t));
+  memcpy(&state_data, state, sizeof(state_t));
 
-  /* Get current state (initial state for MPC) */
-  // delta_x = x - x_bar; x_bar = 0
-  // Positon error, [m]
-  updateInitialState(sensors, state);
+  // Copy the latest controls, calculated by the TinyMPC task
+  memcpy(control, &control_data, sizeof(control_t));
+  xSemaphoreGive(dataMutex);
 
-  /* Controller rate */
-  if (RATE_DO_EXECUTE(MPC_RATE, tick)) { 
-    // Get command reference
-    updateHorizonReference(setpoint);
-
-    /* MPC solve */
-    // Solve optimization problem using ADMM
-    tiny_UpdateLinearCost(&work);
-    tiny_SolveAdmm(&work);
- 
-    // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
-    // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
-    // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
-    // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
-    // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
-    result =  info.status_val * info.iter;
-    // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
-    // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f \n", (double)(Xref[0](5)), (double)(Uhrz[0](2)), (double)(Uhrz[0](3)), (double)(ZU_new[0](0)));
-  }
-
-  if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
-    // Reference from MPC
-    Ulqr = -(Kinf) * (x0 - Xhrz[1]) + ZU_new[0];
-    
-    /* Output control */
-    if (setpoint->mode.z == modeDisable) {
-      control->normalizedForces[0] = 0.0f;
-      control->normalizedForces[1] = 0.0f;
-      control->normalizedForces[2] = 0.0f;
-      control->normalizedForces[3] = 0.0f;
-    } else {
-      control->normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
-      control->normalizedForces[1] = Ulqr(1) + u_hover[1];
-      control->normalizedForces[2] = Ulqr(2) + u_hover[2];
-      control->normalizedForces[3] = Ulqr(3) + u_hover[3];
-    } 
-    control->controlMode = controlModePWM;
-  }
-  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
-
-  // control->normalizedForces[0] = 0.0f;
-  // control->normalizedForces[1] = 0.0f;
-  // control->normalizedForces[2] = 0.0f;
-  // control->normalizedForces[3] = 0.0f;
+  xSemaphoreGive(runTaskSemaphore);
 }
 
 /**
