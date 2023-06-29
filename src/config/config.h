@@ -102,7 +102,7 @@
 #define UART2_TASK_PRI          3
 #define CRTP_SRV_TASK_PRI       0
 #define PLATFORM_SRV_TASK_PRI   0
-#define TINYMPC_TASK_PRI        4
+#define TINYMPC_TASK_PRI        2
 
 // Not compiled
 #if 0

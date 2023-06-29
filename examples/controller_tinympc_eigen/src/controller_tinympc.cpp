@@ -61,7 +61,7 @@ extern "C" {
 #include "tinympc/tinympc.h"
 
 // Edit the debug name to get nice debug prints
-#define DEBUG_MODULE "TINYMPC-E"
+#define DEBUG_MODULE "TINYMPC"
 #include "debug.h"
 
 void appMain() {
@@ -81,10 +81,9 @@ static void tinympcControllerTask(void* parameters);
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
-#define DT 0.002f       // dt
-#define NHORIZON 25   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_500_HZ  // control frequency
-// #define LQR_RATE RATE_500_HZ  // control frequency
+#define NHORIZON 70   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define MPC_RATE RATE_100_HZ  // control frequency
+#define LQR_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
 // #include "traj_fig8_12.h"
@@ -198,22 +197,22 @@ void updateInitialState(const sensorData_t *sensors, const state_t *state) {
 
 void updateHorizonReference(const setpoint_t *setpoint) {
   // Update reference: from stored trajectory or commander
-  if (en_traj) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
-          Xref[i](j) = X_ref_data[traj_idx][j];
-        }
-        if (i < NHORIZON - 1) {
-          for (int j = 0; j < NINPUTS; ++j) {
-            Uref[i](j) = U_ref_data[traj_idx][j];
-          }          
-        }
-      }
-    }
-  }
-  else {
+  // if (en_traj) {
+  //   if (step % traj_hold == 0) {
+  //     traj_idx = (int)(step / traj_hold);
+  //     for (int i = 0; i < NHORIZON; ++i) {
+  //       for (int j = 0; j < NSTATES; ++j) {
+  //         Xref[i](j) = X_ref_data[traj_idx][j];
+  //       }
+  //       if (i < NHORIZON - 1) {
+  //         for (int j = 0; j < NINPUTS; ++j) {
+  //           Uref[i](j) = U_ref_data[traj_idx][j];
+  //         }          
+  //       }
+  //     }
+  //   }
+  // }
+  // else {
     xg(0)  = setpoint->position.x;
     xg(1)  = setpoint->position.y;
     xg(2)  = setpoint->position.z;
@@ -235,7 +234,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     tiny_SetGoalInput(&work, Uref, &ug);
     // // xg(1) = 1.0;
     // // xg(2) = 2.0;
-  }
+  // }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   // stop trajectory executation
@@ -257,12 +256,12 @@ void controllerOutOfTreeInit(void) {
     return;
   }
   // Precompute/Cache
-  // #include "params_500hz.h"
-  #include "params_100hz.h"
+  #include "params_500hz.h"
+  // #include "params_100hz.h"
 
   // End of Precompute/Cache
 
-  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, DT, &A, &B, 0);
+  tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, 0.002, &A, &B, 0);
   tiny_InitSettings(&stgs);
   stgs.rho_init = 250.0;  // Important (select offline, associated with precomp.)
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
@@ -309,7 +308,7 @@ void controllerOutOfTreeInit(void) {
   step = 0;  
   traj_iter = 0;
 
- /* Start task initialization */
+  /* Start task initialization */
 
   runTaskSemaphore = xSemaphoreCreateBinary();
   ASSERT(runTaskSemaphore);
@@ -332,9 +331,10 @@ static void tinympcControllerTask(void* parameters) {
   systemWaitStart();
 
   uint32_t nowMs = T2M(xTaskGetTickCount());
-  uint32_t nextPredictionMs = nowMs;
+  uint32_t nextMpcMs = nowMs;
+  uint32_t nextLqrMs = nowMs;
 
-  uint64_t startTimestamp = usecTimestamp();
+  startTimestamp = usecTimestamp();
 
   while (true) {
     // Update task data with most recent stabilizer loop data
@@ -349,12 +349,26 @@ static void tinympcControllerTask(void* parameters) {
     nowMs = T2M(xTaskGetTickCount()); // would be nice if this had a precision higher than 1ms...
 
     /* Controller rate */
-    if (nowMs >= nextPredictionMs) {
-      nextPredictionMs = nowMs + (1000.0f / MPC_RATE);
+    if (nowMs >= nextMpcMs) {
+      startTimestamp = usecTimestamp();
+      nextMpcMs = nowMs + (1000.0f / MPC_RATE);
       updateHorizonReference(&setpoint_task);
       updateInitialState(&sensors_task, &state_task);
+
       tiny_UpdateLinearCost(&work);
       tiny_SolveAdmm(&work);
+
+      // DEBUG_PRINT("%d\n", usecTimestamp() - startTimestamp);
+    }
+
+    if (nowMs >= nextLqrMs) {
+      startTimestamp = usecTimestamp();
+      nextLqrMs = nowMs + (1000.0f / LQR_RATE);
+
+      updateInitialState(&sensors_task, &state_task);
+
+      Ulqr = -Klqr * (x0 - Xhrz[0]) + ZU_new[0];
+      
       /* Output control */
       if (setpoint_task.mode.z == modeDisable) {
         control_task.normalizedForces[0] = 0.0f;
@@ -368,6 +382,7 @@ static void tinympcControllerTask(void* parameters) {
         control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
       } 
       control_task.controlMode = controlModePWM;
+      // DEBUG_PRINT("%d\n", usecTimestamp() - startTimestamp);
     }
 
     // Copy the controls calculated by the task loop to the global control_data
