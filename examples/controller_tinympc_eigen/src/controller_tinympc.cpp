@@ -81,7 +81,7 @@ static void tinympcControllerTask(void* parameters);
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
-#define NHORIZON 70   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 20   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_100_HZ  // control frequency
 #define LQR_RATE RATE_500_HZ  // control frequency
 
@@ -333,6 +333,8 @@ static void tinympcControllerTask(void* parameters) {
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextMpcMs = nowMs;
   uint32_t nextLqrMs = nowMs;
+  uint32_t prevMpcMs = nowMs;
+  uint32_t prevLqrMs = nowMs;
 
   startTimestamp = usecTimestamp();
 
@@ -351,6 +353,9 @@ static void tinympcControllerTask(void* parameters) {
     /* Controller rate */
     if (nowMs >= nextMpcMs) {
       startTimestamp = usecTimestamp();
+      // DEBUG_PRINT("M: %d\n", startTimestamp - prevMpcMs);
+      // prevMpcMs = startTimestamp;
+      
       nextMpcMs = nowMs + (1000.0f / MPC_RATE);
       updateHorizonReference(&setpoint_task);
       updateInitialState(&sensors_task, &state_task);
@@ -358,16 +363,19 @@ static void tinympcControllerTask(void* parameters) {
       tiny_UpdateLinearCost(&work);
       tiny_SolveAdmm(&work);
 
-      // DEBUG_PRINT("%d\n", usecTimestamp() - startTimestamp);
+      // DEBUG_PRINT("M: %d\n", usecTimestamp() - startTimestamp);
     }
 
     if (nowMs >= nextLqrMs) {
       startTimestamp = usecTimestamp();
+      // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
+      // prevLqrMs = startTimestamp;
+      
       nextLqrMs = nowMs + (1000.0f / LQR_RATE);
 
       updateInitialState(&sensors_task, &state_task);
 
-      Ulqr = -Klqr * (x0 - Xhrz[0]) + ZU_new[0];
+      Ulqr = -Klqr * (x0 - Xhrz[1]) + ZU_new[0];
       
       /* Output control */
       if (setpoint_task.mode.z == modeDisable) {
@@ -382,7 +390,7 @@ static void tinympcControllerTask(void* parameters) {
         control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
       } 
       control_task.controlMode = controlModePWM;
-      // DEBUG_PRINT("%d\n", usecTimestamp() - startTimestamp);
+      // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
     }
 
     // Copy the controls calculated by the task loop to the global control_data
