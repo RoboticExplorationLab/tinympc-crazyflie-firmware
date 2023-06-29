@@ -81,7 +81,7 @@ static void tinympcControllerTask(void* parameters);
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
-#define NHORIZON 20   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 50   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_100_HZ  // control frequency
 #define LQR_RATE RATE_500_HZ  // control frequency
 
@@ -366,33 +366,6 @@ static void tinympcControllerTask(void* parameters) {
       // DEBUG_PRINT("M: %d\n", usecTimestamp() - startTimestamp);
     }
 
-    if (nowMs >= nextLqrMs) {
-      startTimestamp = usecTimestamp();
-      // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
-      // prevLqrMs = startTimestamp;
-      
-      nextLqrMs = nowMs + (1000.0f / LQR_RATE);
-
-      updateInitialState(&sensors_task, &state_task);
-
-      Ulqr = -Klqr * (x0 - Xhrz[1]) + ZU_new[0];
-      
-      /* Output control */
-      if (setpoint_task.mode.z == modeDisable) {
-        control_task.normalizedForces[0] = 0.0f;
-        control_task.normalizedForces[1] = 0.0f;
-        control_task.normalizedForces[2] = 0.0f;
-        control_task.normalizedForces[3] = 0.0f;
-      } else {
-        control_task.normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
-        control_task.normalizedForces[1] = Ulqr(1) + u_hover[1];
-        control_task.normalizedForces[2] = Ulqr(2) + u_hover[2];
-        control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
-      } 
-      control_task.controlMode = controlModePWM;
-      // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
-    }
-
     // Copy the controls calculated by the task loop to the global control_data
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     memcpy(&control_data, &control_task, sizeof(control_t));
@@ -413,6 +386,35 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xSemaphoreGive(dataMutex);
 
   xSemaphoreGive(runTaskSemaphore);
+
+  if (nowMs >= nextLqrMs) {
+    startTimestamp = usecTimestamp();
+    // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
+    // prevLqrMs = startTimestamp;
+    
+    nextLqrMs = nowMs + (1000.0f / LQR_RATE);
+
+    updateInitialState(&sensors_task, &state_task);
+
+    Ulqr = -Klqr * (x0 - Xhrz[1]) * 0.95 + ZU_new[0];
+
+    
+    
+    /* Output control */
+    if (setpoint_task.mode.z == modeDisable) {
+      control_task.normalizedForces[0] = 0.0f;
+      control_task.normalizedForces[1] = 0.0f;
+      control_task.normalizedForces[2] = 0.0f;
+      control_task.normalizedForces[3] = 0.0f;
+    } else {
+      control_task.normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
+      control_task.normalizedForces[1] = Ulqr(1) + u_hover[1];
+      control_task.normalizedForces[2] = Ulqr(2) + u_hover[2];
+      control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
+    } 
+    control_task.controlMode = controlModePWM;
+    // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
+  }
 }
 
 /**
