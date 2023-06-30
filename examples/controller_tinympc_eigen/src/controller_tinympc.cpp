@@ -368,7 +368,9 @@ static void tinympcControllerTask(void* parameters) {
       tiny_UpdateLinearCost(&work);
       tiny_SolveAdmm(&work);
 
-      // DEBUG_PRINT("M: %d\n", usecTimestamp() - startTimestamp);
+      mpcTime = usecTimestamp() - startTimestamp;
+
+      // DEBUG_PRINT("M: %d\n", mpcTime);
     }
 
     // Copy the controls calculated by the task loop to the global control_data
@@ -435,22 +437,22 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  * MPC controller
  */
 
-// LOG_GROUP_START(ctrlMPC)
+LOG_GROUP_START(ctrlMPC)
 
-// LOG_ADD(LOG_INT8, result, &result)
-// LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
+LOG_ADD(LOG_INT8, result, &result)
+LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
-// LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-// LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
-// LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
-// LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
+LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
+LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
+LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
+LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
 
-// LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
-// LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
-// LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
-// LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
+LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
+LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
+LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
+LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
-// LOG_GROUP_STOP(ctrlMPC)
+LOG_GROUP_STOP(ctrlMPC)
 
 #ifdef __cplusplus
 }
