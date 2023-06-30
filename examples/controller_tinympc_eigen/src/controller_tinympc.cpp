@@ -237,8 +237,6 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     xg(5) = phi.z;
     tiny_SetGoalState(&work, Xref, &xg);
     tiny_SetGoalInput(&work, Uref, &ug);
-    // // xg(1) = 1.0;
-    // // xg(2) = 2.0;
   }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
