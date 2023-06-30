@@ -81,13 +81,13 @@ static void tinympcControllerTask(void* parameters);
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
-#define NHORIZON 50   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 10   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_100_HZ  // control frequency
 #define LQR_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
-// #include "traj_fig8_12.h"
-#include "traj_circle_500hz.h"
+#include "traj_fig8_12.h"
+// #include "traj_circle_500hz.h"
 // #include "traj_perching.h"
 
 // Precomputed data and cache, in params_*.h
@@ -171,6 +171,8 @@ sensorData_t sensors_task;
 state_t state_task;
 control_t control_task;
 
+uint32_t prevLqrMs;
+
 void updateInitialState(const sensorData_t *sensors, const state_t *state) {
   x0(0) = state->position.x;
   x0(1) = state->position.y;
@@ -197,22 +199,25 @@ void updateInitialState(const sensorData_t *sensors, const state_t *state) {
 
 void updateHorizonReference(const setpoint_t *setpoint) {
   // Update reference: from stored trajectory or commander
-  // if (en_traj) {
-  //   if (step % traj_hold == 0) {
-  //     traj_idx = (int)(step / traj_hold);
-  //     for (int i = 0; i < NHORIZON; ++i) {
-  //       for (int j = 0; j < NSTATES; ++j) {
-  //         Xref[i](j) = X_ref_data[traj_idx][j];
-  //       }
-  //       if (i < NHORIZON - 1) {
-  //         for (int j = 0; j < NINPUTS; ++j) {
-  //           Uref[i](j) = U_ref_data[traj_idx][j];
-  //         }          
-  //       }
-  //     }
-  //   }
-  // }
-  // else {
+  // This will carry out the included trajectory first
+  // Better idea is to set `en_traj` from crazyswarm
+  // If just want to follow cmd, replace en_traj with `0`
+  if (en_traj) {
+    if (step % traj_hold == 0) {
+      traj_idx = (int)(step / traj_hold);
+      for (int i = 0; i < NHORIZON; ++i) {
+        for (int j = 0; j < NSTATES; ++j) {
+          Xref[i](j) = X_ref_data[traj_idx][j];
+        }
+        if (i < NHORIZON - 1) {
+          for (int j = 0; j < NINPUTS; ++j) {
+            Uref[i](j) = U_ref_data[traj_idx][j];
+          }          
+        }
+      }
+    }
+  }
+  else {
     xg(0)  = setpoint->position.x;
     xg(1)  = setpoint->position.y;
     xg(2)  = setpoint->position.z;
@@ -234,7 +239,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     tiny_SetGoalInput(&work, Uref, &ug);
     // // xg(1) = 1.0;
     // // xg(2) = 2.0;
-  // }
+  }
   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
   // stop trajectory executation
@@ -252,9 +257,15 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
+  
+  en_traj = true;
+  step = 0;  
+  traj_iter = 0;
+
   if (isInit) {
     return;
   }
+
   // Precompute/Cache
   #include "params_500hz.h"
   // #include "params_100hz.h"
@@ -304,9 +315,6 @@ void controllerOutOfTreeInit(void) {
   -0.118248f,-0.120176f,0.285625f,0.378857f,-0.322169f,0.477573f,-0.066881f,-0.070128f,0.186504f,0.030162f,-0.014177f,0.185941f;
 
   /* End of MPC initialization */  
-  en_traj = true;
-  step = 0;  
-  traj_iter = 0;
 
   /* Start task initialization */
 
@@ -333,8 +341,7 @@ static void tinympcControllerTask(void* parameters) {
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextMpcMs = nowMs;
   uint32_t nextLqrMs = nowMs;
-  uint32_t prevMpcMs = nowMs;
-  uint32_t prevLqrMs = nowMs;
+  // uint32_t prevMpcMs = nowMs;
 
   startTimestamp = usecTimestamp();
 
@@ -352,7 +359,7 @@ static void tinympcControllerTask(void* parameters) {
 
     /* Controller rate */
     if (nowMs >= nextMpcMs) {
-      startTimestamp = usecTimestamp();
+      // startTimestamp = usecTimestamp();
       // DEBUG_PRINT("M: %d\n", startTimestamp - prevMpcMs);
       // prevMpcMs = startTimestamp;
       
@@ -381,40 +388,36 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   memcpy(&sensors_data, sensors, sizeof(sensorData_t));
   memcpy(&state_data, state, sizeof(state_t));
 
-  // Copy the latest controls, calculated by the TinyMPC task
-  memcpy(control, &control_data, sizeof(control_t));
-  xSemaphoreGive(dataMutex);
-
-  xSemaphoreGive(runTaskSemaphore);
-
-  if (nowMs >= nextLqrMs) {
-    startTimestamp = usecTimestamp();
-    // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
-    // prevLqrMs = startTimestamp;
-    
-    nextLqrMs = nowMs + (1000.0f / LQR_RATE);
-
-    updateInitialState(&sensors_task, &state_task);
-
-    Ulqr = -Klqr * (x0 - Xhrz[1]) * 0.95 + ZU_new[0];
-
-    
-    
-    /* Output control */
-    if (setpoint_task.mode.z == modeDisable) {
-      control_task.normalizedForces[0] = 0.0f;
-      control_task.normalizedForces[1] = 0.0f;
-      control_task.normalizedForces[2] = 0.0f;
-      control_task.normalizedForces[3] = 0.0f;
-    } else {
-      control_task.normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
-      control_task.normalizedForces[1] = Ulqr(1) + u_hover[1];
-      control_task.normalizedForces[2] = Ulqr(2) + u_hover[2];
-      control_task.normalizedForces[3] = Ulqr(3) + u_hover[3];
-    } 
-    control_task.controlMode = controlModePWM;
-    // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
+  if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
+    return;
   }
+
+  // startTimestamp = usecTimestamp();
+  // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
+  // prevLqrMs = startTimestamp;
+
+  updateInitialState(sensors, state);
+
+  //// LQR tracks the future knotpoint from MPC
+  Ulqr = -Klqr * (x0 - Xhrz[3]) * 1.5 + ZU_new[2];    // can tune this!
+  
+  /* Output control */
+  if (setpoint->mode.z == modeDisable) {
+    control->normalizedForces[0] = 0.0f;
+    control->normalizedForces[1] = 0.0f;
+    control->normalizedForces[2] = 0.0f;
+    control->normalizedForces[3] = 0.0f;
+  } else {
+    control->normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
+    control->normalizedForces[1] = Ulqr(1) + u_hover[1];
+    control->normalizedForces[2] = Ulqr(2) + u_hover[2];
+    control->normalizedForces[3] = Ulqr(3) + u_hover[3];
+  } 
+  control->controlMode = controlModePWM;
+  // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
+
+  xSemaphoreGive(dataMutex);
+  xSemaphoreGive(runTaskSemaphore);
 }
 
 /**
@@ -424,7 +427,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 // /**
 //  * @brief K gain
 //  */
-// PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+// PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_cstr_inputs, &(stgs.en_cstr_inputs))
+// PARAM_ADD_CORE(PARAM_INT8 | PARAM_PERSISTENT, stgs_max_iter, &(stgs.max_iter))
 
 // PARAM_GROUP_STOP(ctrlMPC)
 
@@ -433,22 +437,22 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  * MPC controller
  */
 
-LOG_GROUP_START(ctrlMPC)
+// LOG_GROUP_START(ctrlMPC)
 
-LOG_ADD(LOG_INT8, result, &result)
-LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
+// LOG_ADD(LOG_INT8, result, &result)
+// LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
-LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
-LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
-LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
+// LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
+// LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
+// LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
+// LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
 
-LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
-LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
-LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
-LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
+// LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
+// LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
+// LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
+// LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
-LOG_GROUP_STOP(ctrlMPC)
+// LOG_GROUP_STOP(ctrlMPC)
 
 #ifdef __cplusplus
 }
