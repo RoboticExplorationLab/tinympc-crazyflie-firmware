@@ -25,7 +25,8 @@ EXTRA_CFLAGS += -I$(PWD)/TinyMPC/include/Eigen
 EXTRA_CFLAGS += -I$(PWD)/TinyMPC/src
 EXTRA_CFLAGS += -DEIGEN_INITIALIZE_MATRICES_BY_ZERO
 EXTRA_CFLAGS += -DEIGEN_NO_MALLOC
-EXTRA_CFLAGS += -DNDEBUG 
+EXTRA_CFLAGS += -DNDEBUG
+EXTRA_CFLAGS += -DEIGEN_FAST_MATH
 #
 # We override the default OOT_CONFIG here, we could also name our config
 # to oot-config and that would be the default.

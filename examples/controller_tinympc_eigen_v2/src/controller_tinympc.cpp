@@ -55,32 +55,38 @@ extern "C" {
 
 // Include tinympc, params, and trajectory to follow
 #include "tinympc/admm.hpp"
-#include "quadrotor_20hz_simple.hpp"
-#include "quadrotor_20hz_figure_eight.hpp"
+#include "quadrotor_50hz_params.hpp"
+#include "quadrotor_100hz_ref_hover.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "TINYMPC-E"
 #include "debug.h"
 
 
-#define MPC_RATE RATE_100_HZ  // control frequency
-#define LQR_RATE RATE_500_HZ  // control frequency
+#define MPC_RATE RATE_250_HZ  // control frequency
 
 // Precomputed data and cache, in params_*.h
 
 
 /* Allocate global variables for MPC */
+// static tinytype u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};  // cf1
+// static tinytype u_hover[4] = {0.7467, 0.667f, 0.78, 0.7f};  // cf2 not correct
+static tinytype u_hover[4] = {.7, .7, .7, .7};
+// static tinytype u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f}; // Set u_hover by inspection from hover test with cfclient
 static struct tiny_cache cache;
 static struct tiny_params params;
 static struct tiny_problem problem;
-static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_total;
 
 // Helper variables
-static uint64_t startTimestamp;
 static bool enable_traj = false;
+static uint64_t startTimestamp;
+static uint64_t timeTaken;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 
-// static bool isInit = false;  // fix for tracking problem
+
+
 // static uint32_t mpcTime = 0;
 // static float u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};  // cf1
 // // static float u_hover[4] = {0.7467, 0.667f, 0.78, 0.7f};  // cf2 not correct
@@ -94,6 +100,8 @@ static struct vec phi; // For converting from the current state estimate's quate
 
 // static struct vec desired_rpy;
 // static struct quat attitude;
+
+
 
 static inline float quat_dot(quaternion_t a, quaternion_t b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
@@ -129,7 +137,8 @@ void appMain() {
 
 void UpdateHorizonReference(const setpoint_t *setpoint) {
   if (enable_traj) {
-    params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, 0);
+    // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, 0);
+    params.Xref = Xref_total.replicate<1,NHORIZON>();
   }
   else {
     phi = quat_2_rp(normalize_quat(setpoint->attitudeQuaternion));  // quaternion to Rodrigues parameters
@@ -154,16 +163,21 @@ void controllerOutOfTreeInit(void) {
   cache.coeff_d2p = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_data);
 
   // Copy parameter data
-  params.Q = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Q_data);
-  params.Qf = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Qf_data);
-  params.R = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(R_data);
-  params.u_min = tiny_MatrixNuNhm1::Constant(-0.5);
-  params.u_max = tiny_MatrixNuNhm1::Constant(0.5);
+  params.Q = Eigen::Map<tiny_VectorNx>(Q_data);
+  params.Qf = Eigen::Map<tiny_VectorNx>(Qf_data);
+  params.R = Eigen::Map<tiny_VectorNu>(R_data);
+  params.u_min = tiny_VectorNu(-u_hover[0], -u_hover[1], -u_hover[2], -u_hover[3]).replicate<1, NHORIZON-1>();
+  params.u_max = tiny_VectorNu(1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3]).replicate<1, NHORIZON-1>();
+  // params.u_min = tiny_MatrixNuNhm1::Constant(-0.5);
+  // params.u_max = tiny_MatrixNuNhm1::Constant(0.5);
   for (int i=0; i<NHORIZON; i++) {
       params.x_min[i] = tiny_VectorNc::Constant(-99999); // Currently unused
-      params.x_max[i] = tiny_VectorNc::Zero();
+      params.x_max[i] = tiny_VectorNc::Constant(99999);
       params.A_constraints[i] = tiny_MatrixNcNx::Zero();
   }
+  // params.x_min = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(-99999);
+  // params.x_max = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(99999);
+  // params.A_constraints = Matrix<tinytype, NHORIZON, NSTATES>::Zero();
   params.Xref = tiny_MatrixNxNh::Zero();
   params.Uref = tiny_MatrixNuNhm1::Zero();
   params.cache = cache;
@@ -190,11 +204,14 @@ void controllerOutOfTreeInit(void) {
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 100;
+  problem.max_iter = 10;
   problem.iters_check_rho_update = 10;
 
   // Copy reference trajectory into Eigen matrix
-  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  Xref_total << 0.0000000,	0.0000000,	1.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000;
+
+  enable_traj = true;
 }
 
 bool controllerOutOfTreeTest() {
@@ -202,15 +219,14 @@ bool controllerOutOfTreeTest() {
   return true;
 }
 
-
-
+static int count = 0;
 
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick) {
-  // Get current time
-  startTimestamp = usecTimestamp();
 
+  
   /* Controller rate */
   if (RATE_DO_EXECUTE(MPC_RATE, tick)) { 
+
     // TODO: predict into the future and set initial x to wherever we think we'll be
     //    by the time we're done computing the input for that state. If we just set
     //    initial x to current state then by the time we compute the optimal input for
@@ -223,14 +239,37 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
                         state->velocity.x, state->velocity.y, state->velocity.z,
                         radians(sensors->gyro.x), radians(sensors->gyro.y), radians(sensors->gyro.z);
 
+    // DEBUG_PRINT("zset: %.5f\n", (double)(problem.x.col(0)(2)));
+
     // Get command reference
     UpdateHorizonReference(setpoint);
 
     /* MPC solve */
     // Solve optimization problem using ADMM
     solve_admm(&problem, &params);
- 
-    // // DEBUG_PRINT("Uhrz[0] = [%.2f, %.2f]\n", (double)(Uhrz[0](0)), (double)(Uhrz[0](1)));
+    // solve_lqr(&problem, &params);
+    
+    /* Output control */
+    if (setpoint->mode.z == modeDisable) {
+      control->normalizedForces[0] = 0.0f;
+      control->normalizedForces[1] = 0.0f;
+      control->normalizedForces[2] = 0.0f;
+      control->normalizedForces[3] = 0.0f;
+    } else {
+      control->normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];  // PWM 0..1
+      control->normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
+      control->normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
+      control->normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
+    }
+    control->controlMode = controlModePWM;
+    // DEBUG_PRINT("ctrl[0] = %.5f\n", (double)(control->normalizedForces[0]));
+    // control->normalizedForces[0] = 0.0f;
+    // control->normalizedForces[1] = 0.0f;
+    // control->normalizedForces[2] = 0.0f;
+    // control->normalizedForces[3] = 0.0f;
+
+    // DEBUG_PRINT("u.col(0) = %.5f\n", (double)(problem.u.col(0)(0)));
+    // DEBUG_PRINT("Xref = %.2f, %.2f, %.2f\n", (double)(params.Xref.col(0)(0)), (double)(params.Xref.col(0)(1)), (double)(params.Xref.col(0)(2)));
     // // DEBUG_PRINT("ZU[0] = [%.2f, %.2f]\n", (double)(ZU_new[0](0)), (double)(ZU_new[0](1)));
     // // DEBUG_PRINT("YU[0] = [%.2f, %.2f, %.2f, %.2f]\n", (double)(YU[0].data[0]), (double)(YU[0].data[1]), (double)(YU[0].data[2]), (double)(YU[0].data[3]));
     // // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
