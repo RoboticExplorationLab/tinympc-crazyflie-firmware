@@ -62,14 +62,16 @@ extern "C" {
 #include "tinympc/admm.hpp"
 #include "controller_pid.h"
 
-#include "quadrotor_250hz_params.hpp"
+#include "quadrotor_10hz_params.hpp"
+// #include "quadrotor_250hz_params.hpp"
 // #include "quadrotor_100hz_ref_hover.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPCTASK"
 #include "debug.h"
 
-#define MPC_RATE RATE_250_HZ  // control frequency
+// #define MPC_RATE RATE_250_HZ  // control frequency
+#define MPC_RATE 10
 #define LQR_RATE RATE_250_HZ  // control frequency
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -113,7 +115,7 @@ static tiny_VectorNx current_state;
 // Helper variables
 static bool enable_traj = false;
 static uint64_t startTimestamp;
-static uint64_t timeTaken;
+static uint64_t nextMpcTime_us;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
 
@@ -221,7 +223,7 @@ void controllerOutOfTreeInit(void) {
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 5;
+  problem.max_iter = 20;
   problem.iters_check_rho_update = 10;
 
   // // Copy reference trajectory into Eigen matrix
@@ -255,7 +257,7 @@ static void tinympcControllerTask(void* parameters) {
 
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextMpcMs = nowMs;
-  
+
   // while (true) {
   //   xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
   // }
@@ -266,7 +268,7 @@ static void tinympcControllerTask(void* parameters) {
 
         // Update task data with most recent stabilizer loop data
         xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
-        
+
         xSemaphoreTake(dataMutex, portMAX_DELAY);
         memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
         memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
@@ -277,8 +279,7 @@ static void tinympcControllerTask(void* parameters) {
         nowMs = T2M(xTaskGetTickCount());
         if (nowMs >= nextMpcMs) {
           nextMpcMs = nowMs + (1000.0f / MPC_RATE);
-
-          // DEBUG_PRINT("us: %d\n", usecTimestamp()- startTimestamp);
+          nextMpcTime_us = usecTimestamp() + (1000000.0f / MPC_RATE);
 
           // TODO: predict into the future and set initial x to wherever we think we'll be
           //    by the time we're done computing the input for that state. If we just set
@@ -296,35 +297,36 @@ static void tinympcControllerTask(void* parameters) {
           UpdateHorizonReference(&setpoint_task);
 
           /* MPC solve */
-          // solve_admm(&problem, &params);
-          solve_lqr(&problem, &params);
-          
-          // /* Output control */
-          if (setpoint_task.mode.z == modeDisable) {
-            control_task.normalizedForces[0] = 0.0f;
-            control_task.normalizedForces[1] = 0.0f;
-            control_task.normalizedForces[2] = 0.0f;
-            control_task.normalizedForces[3] = 0.0f;
-          } else {
-            control_task.normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];  // PWM 0..1
-            control_task.normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
-            control_task.normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
-            control_task.normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
-          }
-          control_task.controlMode = controlModePWM;
+          solve_admm(&problem, &params, nextMpcTime_us);
+          DEBUG_PRINT("iters: %d\n", problem.iter);
+          // solve_lqr(&problem, &params);
+
+          // // /* Output control */
+          // if (setpoint_task.mode.z == modeDisable) {
+          //   control_task.normalizedForces[0] = 0.0f;
+          //   control_task.normalizedForces[1] = 0.0f;
+          //   control_task.normalizedForces[2] = 0.0f;
+          //   control_task.normalizedForces[3] = 0.0f;
+          // } else {
+          //   control_task.normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];
+          //   control_task.normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
+          //   control_task.normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
+          //   control_task.normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
+          // }
+          // control_task.controlMode = controlModePWM;
           // DEBUG_PRINT("ctrl[0] = %.4f\n", control_task.normalizedForces[0]);
           // control_task.normalizedForces[0] = 0.0f;
           // control_task.normalizedForces[1] = 0.0f;
           // control_task.normalizedForces[2] = 0.0f;
           // control_task.normalizedForces[3] = 0.0f;
 
+          mpc_setpoint_task << problem.x.col(3);
+
           // Copy the controls calculated by the task loop to the global control_data
-          mpc_setpoint_task = problem.x.col(3);
           xSemaphoreTake(dataMutex, portMAX_DELAY);
           memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
           // memcpy(&control_data, &control_task, sizeof(control_t));
           xSemaphoreGive(dataMutex);
-          // DEBUG_PRINT("ctdata: %.4f\n", control_data.normalizedForces[0]);
           // startTimestamp = usecTimestamp();
         }
     //   }
@@ -346,8 +348,24 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   memcpy(&state_data, state, sizeof(state_t));
   // memcpy(control, &control_data, sizeof(state_t));
 
+  mpc_setpoint_pid.mode.yaw = modeAbs;
+  mpc_setpoint_pid.mode.x = modeAbs;
+  mpc_setpoint_pid.mode.y = modeAbs;
+  mpc_setpoint_pid.mode.z = modeAbs;
+  mpc_setpoint_pid.position.x = mpc_setpoint(0);
+  mpc_setpoint_pid.position.y = mpc_setpoint(1);
+  mpc_setpoint_pid.position.z = mpc_setpoint(2);
+  mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
+  // mpc_setpoint_pid.position.x = 0;
+  // mpc_setpoint_pid.position.y = 0;
+  // mpc_setpoint_pid.position.z = 1;
+  // mpc_setpoint_pid.attitude.yaw = 0;
 
-  controllerPid(control, setpoint, sensors, state, tick);
+  // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+  //   DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
+  // }
+
+  controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
 
   // if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
 
@@ -374,20 +392,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   //   }
   //   control->controlMode = controlModePWM;
   // }
-
-  // // if (setpoint->mode.z == modeDisable) {
-  // //   control->normalizedForces[0] = 0.0f;
-  // //   control->normalizedForces[1] = 0.0f;
-  // //   control->normalizedForces[2] = 0.0f;
-  // //   control->normalizedForces[3] = 0.0f;
-  // // } else {
-  // //   control->normalizedForces[0] = control_data.normalizedForces[0];
-  // //   control->normalizedForces[1] = control_data.normalizedForces[1];
-  // //   control->normalizedForces[2] = control_data.normalizedForces[2];
-  // //   control->normalizedForces[3] = control_data.normalizedForces[3];
-  // // }
-  // // control->controlMode = controlModePWM;
-
 
   xSemaphoreGive(dataMutex);
 
