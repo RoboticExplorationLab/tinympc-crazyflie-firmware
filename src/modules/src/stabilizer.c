@@ -243,7 +243,7 @@ static void stabilizerTask(void* param)
   uint32_t lastWakeTime;
   vTaskSetApplicationTaskTag(0, (void*)TASK_STABILIZER_ID_NBR);
 
-  //Wait for the system to be fully started to start stabilization loop
+  // Wait for the system to be fully started to start stabilization loop
   systemWaitStart();
 
   DEBUG_PRINT("Wait for sensor calibration...\n");
@@ -253,7 +253,7 @@ static void stabilizerTask(void* param)
   while(!sensorsAreCalibrated()) {
     vTaskDelayUntil(&lastWakeTime, F2T(RATE_MAIN_LOOP));
   }
-  // Initialize tick to something else then 0
+  // Initialize tick to something other then 0
   tick = 1;
 
   rateSupervisorInit(&rateSupervisorContext, xTaskGetTickCount(), M2T(1000), 997, 1003, 1);
@@ -263,7 +263,7 @@ static void stabilizerTask(void* param)
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
-    tick++;
+    // tick++;
 
     // update sensorData struct (for logging variables)
     sensorsAcquire(&sensorData, tick);
@@ -295,6 +295,13 @@ static void stabilizerTask(void* param)
       // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       controller(&control, &setpoint, &sensorData, &state, tick);
+
+      // DEBUG_PRINT("f: %.4f\n", control.normalizedForces[0]);
+      // control.normalizedForces[0] = 0;
+      // control.normalizedForces[1] = 0;
+      // control.normalizedForces[2] = 0;
+      // control.normalizedForces[3] = 0;
+      // control.thrust = 0; // For setting PID = 0
 
       checkEmergencyStopTimeout();
 
