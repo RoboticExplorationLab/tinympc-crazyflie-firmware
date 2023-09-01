@@ -58,8 +58,10 @@ extern "C" {
 
 #include "cpp_compat.h"   // needed to compile Cpp to C
 
-// Include tinympc, params, and trajectory to follow
+// Include tinympc and PID controllers, params, and trajectory to follow
 #include "tinympc/admm.hpp"
+#include "controller_pid.h"
+
 #include "quadrotor_250hz_params.hpp"
 // #include "quadrotor_100hz_ref_hover.hpp"
 
@@ -89,6 +91,7 @@ setpoint_t setpoint_data;
 sensorData_t sensors_data;
 state_t state_data;
 tiny_VectorNx mpc_setpoint;
+setpoint_t mpc_setpoint_pid;
 // Copies that stay constant for duration of MPC loop
 setpoint_t setpoint_task;
 sensorData_t sensors_task;
@@ -162,7 +165,9 @@ void UpdateHorizonReference(const setpoint_t *setpoint) {
   }
 }
 
-void controllerOutOfTreeInit(void) { 
+void controllerOutOfTreeInit(void) {
+
+  controllerPidInit();
 
   // Copy cache data from problem_data/quadrotor*.hpp
   cache.Adyn = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
@@ -291,22 +296,22 @@ static void tinympcControllerTask(void* parameters) {
           UpdateHorizonReference(&setpoint_task);
 
           /* MPC solve */
-          solve_admm(&problem, &params);
-          // solve_lqr(&problem, &params);
+          // solve_admm(&problem, &params);
+          solve_lqr(&problem, &params);
           
           // /* Output control */
-          // if (setpoint_task.mode.z == modeDisable) {
-          //   control_task.normalizedForces[0] = 0.0f;
-          //   control_task.normalizedForces[1] = 0.0f;
-          //   control_task.normalizedForces[2] = 0.0f;
-          //   control_task.normalizedForces[3] = 0.0f;
-          // } else {
-          //   control_task.normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];  // PWM 0..1
-          //   control_task.normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
-          //   control_task.normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
-          //   control_task.normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
-          // }
-          // control_task.controlMode = controlModePWM;
+          if (setpoint_task.mode.z == modeDisable) {
+            control_task.normalizedForces[0] = 0.0f;
+            control_task.normalizedForces[1] = 0.0f;
+            control_task.normalizedForces[2] = 0.0f;
+            control_task.normalizedForces[3] = 0.0f;
+          } else {
+            control_task.normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];  // PWM 0..1
+            control_task.normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
+            control_task.normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
+            control_task.normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
+          }
+          control_task.controlMode = controlModePWM;
           // DEBUG_PRINT("ctrl[0] = %.4f\n", control_task.normalizedForces[0]);
           // control_task.normalizedForces[0] = 0.0f;
           // control_task.normalizedForces[1] = 0.0f;
@@ -341,69 +346,50 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   memcpy(&state_data, state, sizeof(state_t));
   // memcpy(control, &control_data, sizeof(state_t));
 
-  if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
-    return;
-  }
 
-  phi = quat_2_rp(normalize_quat(state->attitudeQuaternion));  // quaternion to Rodrigues parameters
-  current_state << state->position.x, state->position.y, state->position.z, 
-                    phi.x, phi.y, phi.z, 
-                    state->velocity.x, state->velocity.y, state->velocity.z,
-                    radians(sensors->gyro.x), radians(sensors->gyro.y), radians(sensors->gyro.z);
+  controllerPid(control, setpoint, sensors, state, tick);
 
-  // u_lqr = -params.cache.Kinf * (current_state - mpc_setpoint);
-  u_lqr = -params.cache.Kinf * (current_state - Xref_origin);
+  // if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
 
-  xSemaphoreGive(dataMutex);
-  
-  if (setpoint->mode.z == modeDisable) {
-    control->normalizedForces[0] = 0.0f;
-    control->normalizedForces[1] = 0.0f;
-    control->normalizedForces[2] = 0.0f;
-    control->normalizedForces[3] = 0.0f;
-  } else {
-    control->normalizedForces[0] = u_lqr(0) + u_hover[0];  // PWM 0..1
-    control->normalizedForces[1] = u_lqr(1) + u_hover[1];
-    control->normalizedForces[2] = u_lqr(2) + u_hover[2];
-    control->normalizedForces[3] = u_lqr(3) + u_hover[3];
-  }
-  control->controlMode = controlModePWM;
-  
-  // control->normalizedForces[0] = control_data.normalizedForces[0];
-  // control->normalizedForces[1] = control_data.normalizedForces[1];
-  // control->normalizedForces[2] = control_data.normalizedForces[2];
-  // control->normalizedForces[3] = control_data.normalizedForces[3];
-  // control->controlMode = controlModePWM;
+  //   phi = quat_2_rp(normalize_quat(state->attitudeQuaternion));  // quaternion to Rodrigues parameters
+  //   current_state << state->position.x, state->position.y, state->position.z, 
+  //                     phi.x, phi.y, phi.z, 
+  //                     state->velocity.x, state->velocity.y, state->velocity.z,
+  //                     radians(sensors->gyro.x), radians(sensors->gyro.y), radians(sensors->gyro.z);
 
+  //   // u_lqr = -params.cache.Kinf * (current_state - mpc_setpoint);
+  //   u_lqr = -params.cache.Kinf * (current_state - Xref_origin);
+  //   // u_lqr = -params.cache.Kinf * (current_state - params.Xref.col(0));
 
-  // if (!RATE_DO_EXECUTE(LQR_RATE, tick)) {
-  //   return;
+  //   if (setpoint->mode.z == modeDisable) {
+  //     control->normalizedForces[0] = 0.0f;
+  //     control->normalizedForces[1] = 0.0f;
+  //     control->normalizedForces[2] = 0.0f;
+  //     control->normalizedForces[3] = 0.0f;
+  //   } else {
+  //     control->normalizedForces[0] = u_lqr(0) + u_hover[0];  // PWM 0..1
+  //     control->normalizedForces[1] = u_lqr(1) + u_hover[1];
+  //     control->normalizedForces[2] = u_lqr(2) + u_hover[2];
+  //     control->normalizedForces[3] = u_lqr(3) + u_hover[3];
+  //   }
+  //   control->controlMode = controlModePWM;
   // }
 
-  // // startTimestamp = usecTimestamp();
-  // // DEBUG_PRINT("L: %d\n", startTimestamp - prevLqrMs);
-  // // prevLqrMs = startTimestamp;
+  // // if (setpoint->mode.z == modeDisable) {
+  // //   control->normalizedForces[0] = 0.0f;
+  // //   control->normalizedForces[1] = 0.0f;
+  // //   control->normalizedForces[2] = 0.0f;
+  // //   control->normalizedForces[3] = 0.0f;
+  // // } else {
+  // //   control->normalizedForces[0] = control_data.normalizedForces[0];
+  // //   control->normalizedForces[1] = control_data.normalizedForces[1];
+  // //   control->normalizedForces[2] = control_data.normalizedForces[2];
+  // //   control->normalizedForces[3] = control_data.normalizedForces[3];
+  // // }
+  // // control->controlMode = controlModePWM;
 
-  // updateInitialState(sensors, state);
 
-  // //// LQR tracks the future knotpoint from MPC
-  // Ulqr = -Klqr * (x0 - Xhrz[3]) * 1.5 + ZU_new[2];    // can tune this!
-  
-  // /* Output control */
-  // if (setpoint->mode.z == modeDisable) {
-  //   control->normalizedForces[0] = 0.0f;
-  //   control->normalizedForces[1] = 0.0f;
-  //   control->normalizedForces[2] = 0.0f;
-  //   control->normalizedForces[3] = 0.0f;
-  // } else {
-  //   control->normalizedForces[0] = Ulqr(0) + u_hover[0];  // PWM 0..1
-  //   control->normalizedForces[1] = Ulqr(1) + u_hover[1];
-  //   control->normalizedForces[2] = Ulqr(2) + u_hover[2];
-  //   control->normalizedForces[3] = Ulqr(3) + u_hover[3];
-  // } 
-  // control->controlMode = controlModePWM;
-  // // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
-
+  xSemaphoreGive(dataMutex);
 
   // Allows mpc task to run again
   xSemaphoreGive(runTaskSemaphore);
