@@ -58,21 +58,29 @@ extern "C" {
 
 #include "cpp_compat.h"   // needed to compile Cpp to C
 
-// Include tinympc and PID controllers, params, and trajectory to follow
+// TinyMPC and PID controllers
 #include "tinympc/admm.hpp"
 #include "controller_pid.h"
 
-#include "quadrotor_10hz_params.hpp"
+// Params
+// #include "quadrotor_10hz_params.hpp"
+// #include "quadrotor_50hz_params.hpp"
+// #include "quadrotor_50hz_params_2.hpp"
+#include "quadrotor_50hz_params_3.hpp"
 // #include "quadrotor_250hz_params.hpp"
+
+// Trajectory
 // #include "quadrotor_100hz_ref_hover.hpp"
+// #include "quadrotor_50hz_ref_circle.hpp"
+#include "quadrotor_50hz_ref_circle_2_5s.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPCTASK"
 #include "debug.h"
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
-#define MPC_RATE 10
-#define LQR_RATE RATE_250_HZ  // control frequency
+#define MPC_RATE RATE_50_HZ
+#define LOWLEVEL_RATE RATE_500_HZ
 
 // Semaphore to signal that we got data from the stabilizer loop to process
 static SemaphoreHandle_t runTaskSemaphore;
@@ -107,15 +115,16 @@ static tinytype u_hover[4] = {.65, .65, .65, .65};
 static struct tiny_cache cache;
 static struct tiny_params params;
 static struct tiny_problem problem;
-// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
-static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin;
+static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Starting position for trajectory
 static tiny_VectorNu u_lqr;
 static tiny_VectorNx current_state;
 
 // Helper variables
 static bool enable_traj = false;
+static int traj_index = 0;
+static int max_traj_index = 0;
 static uint64_t startTimestamp;
-static uint64_t nextMpcTime_us;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
 
@@ -154,16 +163,22 @@ void appMain() {
 
 void UpdateHorizonReference(const setpoint_t *setpoint) {
   if (enable_traj) {
-    // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, 0);
-    params.Xref = Xref_origin.replicate<1,NHORIZON>();
+    if (traj_index < max_traj_index) {
+      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      traj_index++;
+    }
+    else {
+      enable_traj = false;
+    }
   }
   else {
-    phi = quat_2_rp(normalize_quat(setpoint->attitudeQuaternion));  // quaternion to Rodrigues parameters
-    tiny_VectorNx xg = {setpoint->position.x, setpoint->position.y, setpoint->position.z, 
-                        phi.x, phi.y, phi.z, 
-                        setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z,
-                        radians(setpoint->attitudeRate.roll), radians(setpoint->attitudeRate.pitch), radians(setpoint->attitudeRate.yaw)};
-    params.Xref = xg.replicate<1,NHORIZON>();
+    // phi = quat_2_rp(normalize_quat(setpoint->attitudeQuaternion));  // quaternion to Rodrigues parameters
+    // tiny_VectorNx xg = {setpoint->position.x, setpoint->position.y, setpoint->position.z, 
+    //                     phi.x, phi.y, phi.z, 
+    //                     setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z,
+    //                     radians(setpoint->attitudeRate.roll), radians(setpoint->attitudeRate.pitch), radians(setpoint->attitudeRate.yaw)};
+    // params.Xref = xg.replicate<1,NHORIZON>();
+    params.Xref = Xref_origin.replicate<1,NHORIZON>();
   }
 }
 
@@ -176,7 +191,7 @@ void controllerOutOfTreeInit(void) {
   cache.Bdyn = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
   cache.rho = rho_value;
   cache.Kinf = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_data);
-  // cache.Pinf = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_data);
+  cache.Pinf = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_data);
   cache.Quu_inv = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_data);
   cache.AmBKt = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_data);
   cache.coeff_d2p = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_data);
@@ -223,18 +238,20 @@ void controllerOutOfTreeInit(void) {
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 20;
+  problem.max_iter = 10;
   problem.iters_check_rho_update = 10;
 
   // // Copy reference trajectory into Eigen matrix
-  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
-  Xref_origin << 0.0000000,	0.0000000,	1.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000;
+  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  // Xref_origin << 0.0000000,	0.0000000,	1.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000,	0.0000000;
+  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  params.Xref = Xref_origin.replicate<1,NHORIZON>();
 
-  enable_traj = true;
-
+  enable_traj = false;
+  traj_index = 0;
+  max_traj_index = NTOTAL - NHORIZON;
 
   /* Begin task initialization */
-
   runTaskSemaphore = xSemaphoreCreateBinary();
   ASSERT(runTaskSemaphore);
 
@@ -243,7 +260,6 @@ void controllerOutOfTreeInit(void) {
   STATIC_MEM_TASK_CREATE(tinympcControllerTask, tinympcControllerTask, TINYMPC_TASK_NAME, NULL, TINYMPC_TASK_PRI);
 
   isInit = true;
-
   /* End of task initialization */
 }
 
@@ -258,82 +274,64 @@ static void tinympcControllerTask(void* parameters) {
   uint32_t nowMs = T2M(xTaskGetTickCount());
   uint32_t nextMpcMs = nowMs;
 
-  // while (true) {
-  //   xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
-  // }
+  startTimestamp = usecTimestamp();
 
   while (true) {
-    // if (runTaskSemaphore != NULL) {
-    //   if (xSemaphoreTake(runTaskSemaphore, portMAX_DELAY) == pdTRUE ) {
+    // Update task data with most recent stabilizer loop data
+    xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
 
-        // Update task data with most recent stabilizer loop data
-        xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
+    memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
+    memcpy(&state_task, &state_data, sizeof(state_t));
+    memcpy(&control_task, &control_data, sizeof(control_t));
+    xSemaphoreGive(dataMutex);
 
-        xSemaphoreTake(dataMutex, portMAX_DELAY);
-        memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
-        memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
-        memcpy(&state_task, &state_data, sizeof(state_t));
-        memcpy(&control_task, &control_data, sizeof(control_t));
-        xSemaphoreGive(dataMutex);
+    nowMs = T2M(xTaskGetTickCount());
+    if (nowMs >= nextMpcMs) {
+      nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
-        nowMs = T2M(xTaskGetTickCount());
-        if (nowMs >= nextMpcMs) {
-          nextMpcMs = nowMs + (1000.0f / MPC_RATE);
-          nextMpcTime_us = usecTimestamp() + (1000000.0f / MPC_RATE);
+      if (usecTimestamp() - startTimestamp > 1000000*5 && traj_index == 0) {
+        enable_traj = true;
+      }
 
-          // TODO: predict into the future and set initial x to wherever we think we'll be
-          //    by the time we're done computing the input for that state. If we just set
-          //    initial x to current state then by the time we compute the optimal input for
-          //    that state we'll already be at the next state and there will be a mismatch
-          //    in the input we're using for our current state.
-          // Set initial x to current state
-          phi = quat_2_rp(normalize_quat(state_task.attitudeQuaternion));  // quaternion to Rodrigues parameters
-          problem.x.col(0) << state_task.position.x, state_task.position.y, state_task.position.z, 
-                              phi.x, phi.y, phi.z, 
-                              state_task.velocity.x, state_task.velocity.y, state_task.velocity.z,
-                              radians(sensors_task.gyro.x), radians(sensors_task.gyro.y), radians(sensors_task.gyro.z);
+      // TODO: predict into the future and set initial x to wherever we think we'll be
+      //    by the time we're done computing the input for that state. If we just set
+      //    initial x to current state then by the time we compute the optimal input for
+      //    that state we'll already be at the next state and there will be a mismatch
+      //    in the input we're using for our current state.
+      // Set initial x to current state
+      phi = quat_2_rp(normalize_quat(state_task.attitudeQuaternion));  // quaternion to Rodrigues parameters
+      problem.x.col(0) << state_task.position.x, state_task.position.y, state_task.position.z, 
+                          phi.x, phi.y, phi.z, 
+                          // 0.0, 0.0, 0.0,
+                          state_task.velocity.x, state_task.velocity.y, state_task.velocity.z,
+                          radians(sensors_task.gyro.x), radians(sensors_task.gyro.y), radians(sensors_task.gyro.z);
 
-          // Get command reference
-          UpdateHorizonReference(&setpoint_task);
+      // Get command reference
+      UpdateHorizonReference(&setpoint_task);
 
-          /* MPC solve */
-          solve_admm(&problem, &params, nextMpcTime_us);
-          DEBUG_PRINT("iters: %d\n", problem.iter);
-          // solve_lqr(&problem, &params);
+      /* MPC solve */
+      solve_admm(&problem, &params);
+      // solve_lqr(&problem, &params);
 
-          // // /* Output control */
-          // if (setpoint_task.mode.z == modeDisable) {
-          //   control_task.normalizedForces[0] = 0.0f;
-          //   control_task.normalizedForces[1] = 0.0f;
-          //   control_task.normalizedForces[2] = 0.0f;
-          //   control_task.normalizedForces[3] = 0.0f;
-          // } else {
-          //   control_task.normalizedForces[0] = problem.u.col(0)(0) + u_hover[0];
-          //   control_task.normalizedForces[1] = problem.u.col(0)(1) + u_hover[1];
-          //   control_task.normalizedForces[2] = problem.u.col(0)(2) + u_hover[2];
-          //   control_task.normalizedForces[3] = problem.u.col(0)(3) + u_hover[3];
-          // }
-          // control_task.controlMode = controlModePWM;
-          // DEBUG_PRINT("ctrl[0] = %.4f\n", control_task.normalizedForces[0]);
-          // control_task.normalizedForces[0] = 0.0f;
-          // control_task.normalizedForces[1] = 0.0f;
-          // control_task.normalizedForces[2] = 0.0f;
-          // control_task.normalizedForces[3] = 0.0f;
+      // mpc_setpoint_task = problem.x.col(2);
+      mpc_setpoint_task = problem.x.col(12);
+      // mpc_setpoint_task = problem.x.col(NHORIZON-1);
+      mpc_setpoint_task(3) = problem.x.col(0)(2);
+      mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
 
-          mpc_setpoint_task << problem.x.col(3);
+      // mpc_setpoint_task(3) = problem.x.col(0)(2);
+      // mpc_setpoint_task(4) = problem.x.col(3)(2);
 
-          // Copy the controls calculated by the task loop to the global control_data
-          xSemaphoreTake(dataMutex, portMAX_DELAY);
-          memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
-          // memcpy(&control_data, &control_task, sizeof(control_t));
-          xSemaphoreGive(dataMutex);
-          // startTimestamp = usecTimestamp();
-        }
-    //   }
-    // }
-    // else {
-    //   DEBUG_PRINT("runTaskSemaphore == NULL\n");
-    // }
+      // mpc_setpoint_task(3) = (float)(problem.iter);
+      // mpc_setpoint_task(4) = params.Xref.col(NHORIZON-1)(2);
+
+      // Copy the setpoint calculated by the task loop to the global mpc_setpoint
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
+      xSemaphoreGive(dataMutex);
+    }
   }
 }
 
@@ -348,24 +346,30 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   memcpy(&state_data, state, sizeof(state_t));
   // memcpy(control, &control_data, sizeof(state_t));
 
-  mpc_setpoint_pid.mode.yaw = modeAbs;
-  mpc_setpoint_pid.mode.x = modeAbs;
-  mpc_setpoint_pid.mode.y = modeAbs;
-  mpc_setpoint_pid.mode.z = modeAbs;
-  mpc_setpoint_pid.position.x = mpc_setpoint(0);
-  mpc_setpoint_pid.position.y = mpc_setpoint(1);
-  mpc_setpoint_pid.position.z = mpc_setpoint(2);
-  mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
-  // mpc_setpoint_pid.position.x = 0;
-  // mpc_setpoint_pid.position.y = 0;
-  // mpc_setpoint_pid.position.z = 1;
-  // mpc_setpoint_pid.attitude.yaw = 0;
+  if (RATE_DO_EXECUTE(LOWLEVEL_RATE, tick)) {
+    mpc_setpoint_pid.mode.yaw = modeAbs;
+    mpc_setpoint_pid.mode.x = modeAbs;
+    mpc_setpoint_pid.mode.y = modeAbs;
+    mpc_setpoint_pid.mode.z = modeAbs;
+    mpc_setpoint_pid.position.x = mpc_setpoint(0);
+    mpc_setpoint_pid.position.y = mpc_setpoint(1);
+    mpc_setpoint_pid.position.z = mpc_setpoint(2);
+    mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
+    // mpc_setpoint_pid.position.x = 0;
+    // mpc_setpoint_pid.position.y = 0;
+    // mpc_setpoint_pid.position.z = 1;
+    // mpc_setpoint_pid.attitude.yaw = 0;
 
-  // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-  //   DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-  // }
+    // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+    //   // DEBUG_PRINT("0: %.4f\n", mpc_setpoint(3));
+    //   // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+    //   DEBUG_PRINT("test: %d\n", test_enable);
+    // }
 
-  controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
+    controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
+    // controllerPid(control, setpoint, sensors, state, tick);
+  }
+
 
   // if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
 
@@ -399,14 +403,13 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xSemaphoreGive(runTaskSemaphore);
 }
 
-/**
- * Tunning variables for the full state quaternion LQR controller
- */
 // PARAM_GROUP_START(ctrlMPC)
-// /**
-//  * @brief K gain
-//  */
+/**
+ * @brief K gain
+ */
 // PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
+// PARAM_ADD(PARAM_FLOAT, test_enable, &test_enable)
+// PARAM_ADD(PARAM_FLOAT, testparam, &testparam)
 
 // PARAM_GROUP_STOP(ctrlMPC)
 
@@ -415,7 +418,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
  * MPC controller
  */
 
-LOG_GROUP_START(ctrlMPC)
+// LOG_GROUP_START(ctrlMPC)
 
 // LOG_ADD(LOG_INT8, result, &result)
 // LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
@@ -430,7 +433,7 @@ LOG_GROUP_START(ctrlMPC)
 // LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
 // LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
-LOG_GROUP_STOP(ctrlMPC)
+// LOG_GROUP_STOP(ctrlMPC)
 
 #ifdef __cplusplus
 } /* extern "C" */
