@@ -260,10 +260,14 @@ static void stabilizerTask(void* param)
 
   DEBUG_PRINT("Ready to fly.\n");
 
+  // uint32_t prevStabilizerMs = usecTimestamp();
+
   while(1) {
-    // The sensor should unlock at 1kHz
+    // The sensor should unlock at 1kHz    
     sensorsWaitDataReady();
     tick++;
+    // DEBUG_PRINT("M: %d\n", usecTimestamp() - prevStabilizerMs);
+    // prevStabilizerMs = usecTimestamp();
 
     // update sensorData struct (for logging variables)
     sensorsAcquire(&sensorData, tick);
