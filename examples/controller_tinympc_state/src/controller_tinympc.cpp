@@ -81,13 +81,13 @@ static void tinympcControllerTask(void* parameters);
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
-#define NHORIZON 10   // horizon steps (NHORIZON states and NHORIZON-1 controls)
+#define NHORIZON 7   // horizon steps (NHORIZON states and NHORIZON-1 controls)
 #define MPC_RATE RATE_100_HZ  // control frequency
 #define LQR_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
-#include "traj_fig8_12.h"
-// #include "traj_circle_500hz.h"
+// #include "traj_fig8_12.h"
+#include "traj_circle_500hz.h"
 // #include "traj_perching.h"
 
 // Precomputed data and cache, in params_*.h
@@ -149,7 +149,7 @@ static tiny_AdmmWorkspace work;
 static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};  // cf1
+static float u_hover[4] = {0.7711f, 0.7647f, 0.7854f, 0.8229f};  // cf1
 // static float u_hover[4] = {0.7467, 0.667f, 0.78, 0.7f};  // cf2 not correct
 static int8_t result = 0;
 static uint32_t step = 0;
@@ -263,7 +263,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
   
-  en_traj = true;
+  en_traj = false;
   step = 0;  
   traj_iter = 0;
 
@@ -273,7 +273,7 @@ void controllerOutOfTreeInit(void) {
 
   // Precompute/Cache
   #include "params_500hz.h"
-  // #include "params_100hz.h"
+  // #include "params_100hz_old.h"
 
   // End of Precompute/Cache
 
@@ -294,12 +294,16 @@ void controllerOutOfTreeInit(void) {
   // tiny_SetGoalInput(&work, Uref, &ug);
 
   /* Set up LQR cost */
-  tiny_InitDataCost(&work, &Q, q, &R, r, q_tilde, r_tilde);
+  tiny_InitDataCost(&work, &Q, q, q_tilde, &R, r, r_tilde);
   // R = R + stgs.rho_init * MatrixMf::Identity();
   // /* Set up constraints */
   ucu << 1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3];
   lcu << -u_hover[0], -u_hover[1], -u_hover[2], -u_hover[3];
   tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
+
+  tiny_SetStateConstraint(&work, &Acx, &lcx, &ucx);
+  Acx(2) = 1.0f;
+  ucx(0) = 0.9f;  // make it more aggressive
 
   tiny_UpdateLinearCost(&work);
 
@@ -307,7 +311,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 20;           // limit this if needed
+  stgs.max_iter = 10;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 0;
   stgs.tol_abs_dual = 1e-2;
@@ -374,10 +378,12 @@ static void tinympcControllerTask(void* parameters) {
 
       tiny_UpdateLinearCost(&work);
       tiny_SolveAdmm(&work);
+      DEBUG_PRINT("U = %.1f, %.1f", ZU_new[0](0), ZU_new[0](1));
+      // DEBUG_PRINT("X = %.2f, %.2f", ZX_new[0](2), ZX_new[1](2));
 
       mpcTime = usecTimestamp() - startTimestamp;
 
-      // DEBUG_PRINT("M: %d\n", mpcTime);
+      // DEBUG_PRINT("H: %d\n", mpcTime);
     }
 
     // Copy the controls calculated by the task loop to the global control_data
@@ -422,7 +428,10 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   } 
   control->controlMode = controlModePWM;
   // DEBUG_PRINT("L: %d\n", usecTimestamp() - startTimestamp);
-
+  // control->normalizedForces[0] = 0.0f;
+  // control->normalizedForces[1] = 0.0f;
+  // control->normalizedForces[2] = 0.0f;
+  // control->normalizedForces[3] = 0.0f;
   xSemaphoreGive(dataMutex);
   xSemaphoreGive(runTaskSemaphore);
 }

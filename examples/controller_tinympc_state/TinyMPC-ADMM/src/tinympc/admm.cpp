@@ -52,6 +52,7 @@ enum tiny_ErrorCode tiny_SolveAdmm(tiny_AdmmWorkspace* work) {
 
     /* Compute x^{k+1} */
     UpdatePrimal(work);
+    // printf("ABCD\n");
 
     /* Compute z^{k+1} and y^{k+1} */
     UpdateSlackDual(work);
