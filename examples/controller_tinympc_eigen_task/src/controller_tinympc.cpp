@@ -66,17 +66,19 @@ extern "C" {
 // #include "quadrotor_10hz_params.hpp"
 // #include "quadrotor_50hz_params.hpp" // rho = 65
 // #include "quadrotor_50hz_params_2.hpp" // rho = 5, passive
-#include "quadrotor_50hz_params_3.hpp" // rho = 5, aggressive
-#include "quadrotor_50hz_params_constraints.hpp"
+// #include "quadrotor_50hz_params_3.hpp" // rho = 5, aggressive
+// #include "quadrotor_50hz_params_constraints.hpp"
 // #include "quadrotor_250hz_params.hpp"
+#include "quadrotor_50hz_params_unconstrained.hpp"
+#include "quadrotor_50hz_params_constrained.hpp"
 
 // Trajectory
 // #include "quadrotor_100hz_ref_hover.hpp"
 // #include "quadrotor_50hz_ref_circle.hpp"
 // #include "quadrotor_50hz_ref_circle_2_5s.hpp"
-// #include "quadrotor_50hz_line_5s.hpp"
+#include "quadrotor_50hz_line_5s.hpp"
 // #include "quadrotor_50hz_line_8s.hpp"
-#include "quadrotor_50hz_line_9s_xyz.hpp"
+// #include "quadrotor_50hz_line_9s_xyz.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPCTASK"
@@ -119,8 +121,8 @@ static tinytype u_hover[4] = {.65, .65, .65, .65};
 static struct tiny_cache cache;
 static struct tiny_params params;
 static struct tiny_problem problem;
-// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
-static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Starting position for trajectory
 static tiny_VectorNu u_lqr;
 static tiny_VectorNx current_state;
@@ -182,18 +184,21 @@ void controllerOutOfTreeInit(void) {
 
   cache.Adyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
   cache.Bdyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
-  cache.rho[1] = rho_constraint_value;
-  cache.Kinf[1] = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_constraint_data);
-  cache.Pinf[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_constraint_data);
-  cache.Quu_inv[1] = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_constraint_data);
-  cache.AmBKt[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_constraint_data);
-  cache.coeff_d2p[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_constraint_data);
+  cache.rho[1] = rho_constrained_value;
+  cache.Kinf[1] = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_constrained_data);
+  cache.Pinf[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_constrained_data);
+  cache.Quu_inv[1] = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_constrained_data);
+  cache.AmBKt[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_constrained_data);
+  cache.coeff_d2p[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_constrained_data);
 
 
   // Copy parameter data
-  params.Q = Eigen::Map<tiny_VectorNx>(Q_data);
-  params.Qf = Eigen::Map<tiny_VectorNx>(Qf_data);
-  params.R = Eigen::Map<tiny_VectorNu>(R_data);
+  params.Q[0] = Eigen::Map<tiny_VectorNx>(Q_data);
+  params.Qf[0] = Eigen::Map<tiny_VectorNx>(Qf_data);
+  params.R[0] = Eigen::Map<tiny_VectorNu>(R_data);
+  params.Q[1] = Eigen::Map<tiny_VectorNx>(Q_constrained_data);
+  params.Qf[1] = Eigen::Map<tiny_VectorNx>(Qf_constrained_data);
+  params.R[1] = Eigen::Map<tiny_VectorNu>(R_constrained_data);
   params.u_min = tiny_VectorNu(-u_hover[0], -u_hover[1], -u_hover[2], -u_hover[3]).replicate<1, NHORIZON-1>();
   params.u_max = tiny_VectorNu(1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3]).replicate<1, NHORIZON-1>();
   // params.u_min = tiny_MatrixNuNhm1::Constant(-0.5);
@@ -234,13 +239,13 @@ void controllerOutOfTreeInit(void) {
   problem.iter = 0;
   problem.max_iter = 20;
   problem.iters_check_rho_update = 10;
-  problem.cache_level = 0; // 0 to rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
+  problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
   // // Copy reference trajectory into Eigen matrix
-  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
-  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
+  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1,NHORIZON>();
 
@@ -263,8 +268,8 @@ void controllerOutOfTreeInit(void) {
 void UpdateHorizonReference(const setpoint_t *setpoint) {
   if (enable_traj) {
     if (traj_index < max_traj_index) {
-      // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
-      params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
+      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      // params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
       traj_index++;
     }
     else {
@@ -362,11 +367,6 @@ static void tinympcControllerTask(void* parameters) {
             params.A_constraints[i] = tiny_MatrixNcNx::Zero();
         }
       }
-      // for (int i=0; i<NHORIZON; i++) {
-      //     params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
-      //     params.x_max[i] = tiny_VectorNc::Constant(-1);
-      //     params.A_constraints[i] = tiny_MatrixNcNx::Zero();
-      // }
 
       // MPC solve
       solve_admm(&problem, &params);
@@ -380,7 +380,8 @@ static void tinympcControllerTask(void* parameters) {
       // mpc_setpoint_task = problem.x.col(12);
       mpc_setpoint_task = problem.x.col(12);
       // mpc_setpoint_task = problem.x.col(NHORIZON-1);
-      mpc_setpoint_task(3) = problem.x.col(0)(2);
+
+      // mpc_setpoint_task(3) = problem.x.col(0)(2);
       // mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
 
       // mpc_setpoint_task(3) = problem.x.col(0)(2);
@@ -423,9 +424,8 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     // mpc_setpoint_pid.attitude.yaw = 0;
 
     // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-    //   // DEBUG_PRINT("0: %.4f\n", mpc_setpoint(3));
+    //   DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
     //   // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-    //   DEBUG_PRINT("test: %d\n", test_enable);
     // }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
