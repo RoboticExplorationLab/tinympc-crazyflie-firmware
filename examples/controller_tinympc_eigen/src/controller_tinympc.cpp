@@ -256,7 +256,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
   
-  en_traj = true;
+  en_traj = false;
   step = 0;  
   traj_iter = 0;
 
@@ -265,8 +265,8 @@ void controllerOutOfTreeInit(void) {
   }
 
   // Precompute/Cache
-  #include "params_500hz.h"
-  // #include "params_100hz.h"
+  // #include "params_500hz.h"
+  #include "params_100hz.h"
 
   // End of Precompute/Cache
 
@@ -300,11 +300,11 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 2;           // limit this if needed
+  stgs.max_iter = 30;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 0;
-  stgs.tol_abs_dual = 5e-2;
-  stgs.tol_abs_prim = 5e-2;
+  stgs.tol_abs_dual = 1e-2;
+  stgs.tol_abs_prim = 1e-2;
 
   Klqr << 
   -0.123589f,0.123635f,0.285625f,-0.394876f,-0.419547f,-0.474536f,-0.073759f,0.072612f,0.186504f,-0.031569f,-0.038547f,-0.187738f,
