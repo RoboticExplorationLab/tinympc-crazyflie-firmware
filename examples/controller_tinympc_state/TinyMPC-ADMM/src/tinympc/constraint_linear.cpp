@@ -13,10 +13,18 @@ enum tiny_ErrorCode tiny_SetInputBound(tiny_AdmmWorkspace* work, Eigen::MatrixMf
   return TINY_NO_ERROR;
 }
 
-enum tiny_ErrorCode tiny_SetStateBound(tiny_AdmmWorkspace* work, Eigen::MatrixNf* Acx, Eigen::VectorNf* lcx, Eigen::VectorNf* ucx) {
+// enum tiny_ErrorCode tiny_SetStateBound(tiny_AdmmWorkspace* work, Eigen::MatrixNf* Acx, Eigen::VectorNf* lcx, Eigen::VectorNf* ucx) {
+//   work->stgs->en_cstr_states = 1;
+//   work->data->Acx = Acx;
+//   (*(work->data->Acx)).setIdentity();
+//   work->data->lcx = lcx;
+//   work->data->ucx = ucx;
+//   return TINY_NO_ERROR;
+// }
+
+enum tiny_ErrorCode tiny_SetStateConstraint(tiny_AdmmWorkspace* work, Eigen::VectorNf* Acx, Eigen::VectorNf* lcx, Eigen::VectorNf* ucx) {
   work->stgs->en_cstr_states = 1;
   work->data->Acx = Acx;
-  (*(work->data->Acx)).setIdentity();
   work->data->lcx = lcx;
   work->data->ucx = ucx;
   return TINY_NO_ERROR;

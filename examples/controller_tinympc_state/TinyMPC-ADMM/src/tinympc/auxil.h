@@ -16,16 +16,13 @@ enum tiny_ErrorCode tiny_SetUnconstrained(tiny_AdmmSettings* stgs);
 // enum tiny_ErrorCode tiny_InitData(tiny_AdmmWorkspace* work);
 
 enum tiny_ErrorCode tiny_InitDataCost(tiny_AdmmWorkspace* work, 
-Eigen::MatrixNf* Q, Eigen::VectorNf* q, Eigen::MatrixMf* R, Eigen::VectorMf* r, Eigen::VectorMf* r_tilde);
+Eigen::MatrixNf* Q, Eigen::VectorNf* q, Eigen::MatrixMf* R, Eigen::VectorMf* r, Eigen::VectorNf* q_tilde, Eigen::VectorMf* r_tilde);
 
 enum tiny_ErrorCode tiny_InitSolution(tiny_AdmmWorkspace* work,
 Eigen::VectorNf* X, Eigen::VectorMf* U,
 Eigen::VectorNf* YX, Eigen::VectorMf* YU, Eigen::VectorNf* YG,
 Eigen::MatrixMNf* Kinf, Eigen::VectorMf* d, 
 Eigen::MatrixNf* Pinf, Eigen::VectorNf* p);
-
-enum tiny_ErrorCode tiny_InitSolutionStretch(tiny_AdmmWorkspace* work,
-Eigen::MatrixMNf* Kinf, Eigen::MatrixNf* Pinf);
 
 enum tiny_ErrorCode tiny_InitWorkspace(tiny_AdmmWorkspace* work,
                                        tiny_AdmmInfo* info,
@@ -40,9 +37,6 @@ Eigen::VectorMf* ZU, Eigen::VectorMf* ZU_new, Eigen::VectorNf* ZX, Eigen::Vector
 // enum tiny_ErrorCode tiny_EvalPrimalCache(tiny_AdmmWorkspace* work);
 
 enum tiny_ErrorCode tiny_InitPrimalCache(tiny_AdmmWorkspace* work, 
-Eigen::MatrixMf* Quu_inv_data, Eigen::MatrixNf* AmBKt_data, Eigen::MatrixNMf* coeff_d2p_data);
-
-enum tiny_ErrorCode tiny_InitPrimalCacheStretch(tiny_AdmmWorkspace* work, 
 Eigen::MatrixMf* Quu_inv_data, Eigen::MatrixNf* AmBKt_data, Eigen::MatrixNMf* coeff_d2p_data);
 
 enum tiny_ErrorCode tiny_ResetInfo(tiny_AdmmWorkspace* work);

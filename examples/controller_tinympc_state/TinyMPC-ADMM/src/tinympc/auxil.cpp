@@ -63,19 +63,13 @@ Eigen::MatrixNf* Pinf, Eigen::VectorNf* p) {
   return TINY_NO_ERROR;  
 }
 
-enum tiny_ErrorCode tiny_InitSolutionStretch(tiny_AdmmWorkspace* work,
-Eigen::MatrixMNf* Kinf, Eigen::MatrixNf* Pinf) {
-  work->soln->Kinf_s  = Kinf;
-  work->soln->Pinf_s  = Pinf;
-  return TINY_NO_ERROR;  
-}
-
 enum tiny_ErrorCode tiny_InitDataCost(tiny_AdmmWorkspace* work, 
-Eigen::MatrixNf* Q, Eigen::VectorNf* q, Eigen::MatrixMf* R, Eigen::VectorMf* r, Eigen::VectorMf* r_tilde) {
+Eigen::MatrixNf* Q, Eigen::VectorNf* q, Eigen::MatrixMf* R, Eigen::VectorMf* r, Eigen::VectorNf* q_tilde, Eigen::VectorMf* r_tilde) {
   work->data->Q = Q;
   work->data->R = R;
   work->data->q = q;
   work->data->r = r;
+  work->data->q_tilde = q_tilde;
   work->data->r_tilde = r_tilde;
   return TINY_NO_ERROR;
 }
@@ -122,14 +116,6 @@ Eigen::MatrixMf* Quu_inv_data, Eigen::MatrixNf* AmBKt_data, Eigen::MatrixNMf* co
   work->Quu_inv   = Quu_inv_data;  
   work->AmBKt     = AmBKt_data; 
   work->coeff_d2p = coeff_d2p_data; 
-  return TINY_NO_ERROR;
-}
-
-enum tiny_ErrorCode tiny_InitPrimalCacheStretch(tiny_AdmmWorkspace* work, 
-Eigen::MatrixMf* Quu_inv_data, Eigen::MatrixNf* AmBKt_data, Eigen::MatrixNMf* coeff_d2p_data) {
-  work->Quu_inv_s   = Quu_inv_data;  
-  work->AmBKt_s     = AmBKt_data; 
-  work->coeff_d2p_s = coeff_d2p_data; 
   return TINY_NO_ERROR;
 }
 

@@ -57,7 +57,6 @@ enum tiny_ErrorCode tiny_EvalModel(Eigen::VectorNf* xn, Eigen::VectorNf* x, Eige
 
 enum tiny_ErrorCode tiny_RollOutClosedLoop(tiny_AdmmWorkspace* work) {
   tiny_Model* model = work->data->model;
-  tiny_Model* model_s = work->data->model_s;
   int N = model[0].nhorizon;
   int adaptive_horizon = work->stgs->adaptive_horizon;
   
@@ -67,14 +66,14 @@ enum tiny_ErrorCode tiny_RollOutClosedLoop(tiny_AdmmWorkspace* work) {
   else {
     for (int k = 0; k < N - 1; ++k) {
       // Control input: u = - d - K*x
+      // MatMulAdd2(work->soln->U[k],  work->soln->d[k], work->soln->Kinf, work->soln->X[k], -1, -1);
       (work->soln->U[k]) = -work->soln->d[k];
+      (work->soln->U[k]).noalias() -= (*(work->soln->Kinf)).lazyProduct(work->soln->X[k]);
       // Next state: x = A*x + B*u + f
-      if (adaptive_horizon > 0 && k > adaptive_horizon - 1) {
-        (work->soln->U[k]).noalias() -= (*(work->soln->Kinf_s)).lazyProduct(work->soln->X[k]);
-        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model_s[0], 0);
+      if (adaptive_horizon && k > adaptive_horizon - 1) {
+        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[1], 0);
       }
       else {
-        (work->soln->U[k]).noalias() -= (*(work->soln->Kinf)).lazyProduct(work->soln->X[k]);
         tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[0], 0);
       }
     }        
@@ -84,15 +83,14 @@ enum tiny_ErrorCode tiny_RollOutClosedLoop(tiny_AdmmWorkspace* work) {
 
 enum tiny_ErrorCode tiny_RollOutOpenLoop(tiny_AdmmWorkspace* work) {
   tiny_Model* model = work->data->model;
-  tiny_Model* model_s = work->data->model_s;
   int N = model[0].nhorizon;
   int adaptive_horizon = work->stgs->adaptive_horizon;
   
   if (model[0].ltv) {
     for (int k = 0; k < N - 1; ++k) {
       // Next state: x = A*x + B*u + f
-      if (adaptive_horizon > 0 && k > adaptive_horizon - 1) {
-        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model_s[0], k);
+      if (adaptive_horizon && k > adaptive_horizon - 1) {
+        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[1], k);
       }
       else {
         tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[0], k);
@@ -102,8 +100,8 @@ enum tiny_ErrorCode tiny_RollOutOpenLoop(tiny_AdmmWorkspace* work) {
   else {
     for (int k = 0; k < N - 1; ++k) {
       // Next state: x = A*x + B*u + f
-      if (adaptive_horizon > 0 && k > adaptive_horizon - 1) {
-        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model_s[0], 0);
+      if (adaptive_horizon && k > adaptive_horizon - 1) {
+        tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[1], 0);
       }
       else {
         tiny_EvalModel(&(work->soln->X[k + 1]), &(work->soln->X[k]), &(work->soln->U[k]), &model[0], 0);

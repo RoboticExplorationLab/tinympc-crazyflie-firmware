@@ -14,6 +14,8 @@ enum tiny_ErrorCode tiny_SolveAdmm(tiny_AdmmWorkspace* work);
 
 enum tiny_ErrorCode UpdatePrimal(tiny_AdmmWorkspace* work);
 
+enum tiny_ErrorCode ProjectHyperplane(tiny_AdmmWorkspace* work);
+
 enum tiny_ErrorCode UpdateSlackDual(tiny_AdmmWorkspace* work);
 
 enum tiny_ErrorCode ComputePrimalResidual(tiny_AdmmWorkspace* work);

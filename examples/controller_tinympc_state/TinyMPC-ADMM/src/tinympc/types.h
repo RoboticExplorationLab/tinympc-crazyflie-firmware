@@ -49,12 +49,10 @@ typedef struct {
   Eigen::VectorNf* X;      ///< State trajectory solution 
   Eigen::VectorMf* U;      ///< Input trajectory solution
 
-  Eigen::MatrixMNf* Kinf;       ///< Feedback gain of IHLQR
-  Eigen::MatrixMNf* Kinf_s;     ///< Feedback gain of IHLQR
-  Eigen::VectorMf*  d;          ///< Feedforward gain
-  Eigen::MatrixNf*  Pinf;       ///< Terminal cost Hessian of IHLQR
-  Eigen::MatrixNf*  Pinf_s;     ///< Terminal cost Hessian of IHLQR
-  Eigen::VectorNf*  p;          ///< Terminal cost gradient
+  Eigen::MatrixMNf* Kinf;    ///< Feedback gain of IHLQR
+  Eigen::VectorMf*  d;      ///< Feedforward gain
+  Eigen::MatrixNf*  Pinf;    ///< Terminal cost Hessian of IHLQR
+  Eigen::VectorNf*  p;      ///< Terminal cost gradient
   
   Eigen::VectorMf* YU;     ///< Dual variables for input constraints
   Eigen::VectorNf* YX;     ///< Dual variables for state constraints
@@ -124,19 +122,19 @@ typedef struct {
  */
 typedef struct {
   tiny_Model* model;    ///< System model
-  tiny_Model* model_s;   ///< Stretched model
   Eigen::VectorNf* x0;
 
   Eigen::MatrixNf* Q;
   Eigen::MatrixMf* R;
   Eigen::VectorNf* q;
+  Eigen::VectorNf* q_tilde;
   Eigen::VectorMf* r;
   Eigen::VectorMf* r_tilde;
   
   Eigen::VectorNf* Xref;
   Eigen::VectorMf* Uref;
 
-  Eigen::MatrixNf* Acx;
+  Eigen::VectorNf* Acx;
   Eigen::VectorNf* ucx;
   Eigen::VectorNf* lcx;
   Eigen::MatrixMf* Acu;
@@ -164,10 +162,6 @@ typedef struct {
   Eigen::MatrixNf*  AmBKt;       ///< nxn cache for (A - BKinf)'
   Eigen::MatrixNMf* coeff_d2p;   ///< nxm cache for Kinf'*R - AmBKt*Pinf*B
   
-  Eigen::MatrixMf*  Quu_inv_s;     ///< mxm cache for (R + B'*Pinf*B)\I 
-  Eigen::MatrixNf*  AmBKt_s;       ///< nxn cache for (A - BKinf)'
-  Eigen::MatrixNMf* coeff_d2p_s;   ///< nxm cache for Kinf'*R - AmBKt*Pinf*B
-
   Eigen::VectorMf* ZU;         ///< Slack variable for input
   Eigen::VectorMf* ZU_new;     ///< Updated slack variable for input
   Eigen::VectorNf* ZX;         ///< Slack variable for input

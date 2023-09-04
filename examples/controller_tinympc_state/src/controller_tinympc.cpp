@@ -109,10 +109,12 @@ static VectorMf Uhrz[NHORIZON-1];
 static VectorMf Ulqr;
 static VectorMf d[NHORIZON-1];
 static VectorNf p[NHORIZON];
-static VectorMf YU[NHORIZON];
+static VectorMf YU[NHORIZON-1];
+static VectorNf YX[NHORIZON];
 
 static VectorNf q[NHORIZON-1];
 static VectorMf r[NHORIZON-1];
+static VectorNf q_tilde[NHORIZON];
 static VectorMf r_tilde[NHORIZON-1];
 
 static VectorNf Xref[NHORIZON];
@@ -121,10 +123,15 @@ static VectorMf Uref[NHORIZON-1];
 static MatrixMf Acu;
 static VectorMf ucu;
 static VectorMf lcu;
+static VectorNf Acx;
+static VectorNf ucx;
+static VectorNf lcx;
 
 static VectorMf Qu;
 static VectorMf ZU[NHORIZON-1]; 
 static VectorMf ZU_new[NHORIZON-1];
+static VectorNf ZX[NHORIZON]; 
+static VectorNf ZX_new[NHORIZON];
 
 static VectorNf x0;
 static VectorNf xg;
@@ -272,13 +279,13 @@ void controllerOutOfTreeInit(void) {
 
   tiny_InitModel(&model, NSTATES, NINPUTS, NHORIZON, 0, 0, 0.002, &A, &B, 0);
   tiny_InitSettings(&stgs);
-  stgs.rho_init = 250.0;  // Important (select offline, associated with precomp.)
+  stgs.rho_init = 500.0;  // Important (select offline, associated with precomp.)
   tiny_InitWorkspace(&work, &info, &model, &data, &soln, &stgs);
   
   // Fill in the remaining struct 
-  tiny_InitWorkspaceTemp(&work, &Qu, ZU, ZU_new, 0, 0);
+  tiny_InitWorkspaceTemp(&work, &Qu, ZU, ZU_new, ZX, ZX_new);
   tiny_InitPrimalCache(&work, &Quu_inv, &AmBKt, &coeff_d2p);
-  tiny_InitSolution(&work, Xhrz, Uhrz, 0, YU, 0, &Kinf, d, &Pinf, p);
+  tiny_InitSolution(&work, Xhrz, Uhrz, YX, YU, 0, &Kinf, d, &Pinf, p);
 
   tiny_SetInitialState(&work, &x0);  
   tiny_SetStateReference(&work, Xref);
@@ -287,7 +294,7 @@ void controllerOutOfTreeInit(void) {
   // tiny_SetGoalInput(&work, Uref, &ug);
 
   /* Set up LQR cost */
-  tiny_InitDataCost(&work, &Q, q, &R, r, r_tilde);
+  tiny_InitDataCost(&work, &Q, q, &R, r, q_tilde, r_tilde);
   // R = R + stgs.rho_init * MatrixMf::Identity();
   // /* Set up constraints */
   ucu << 1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3];
@@ -300,11 +307,11 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 2;           // limit this if needed
+  stgs.max_iter = 20;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 0;
-  stgs.tol_abs_dual = 5e-2;
-  stgs.tol_abs_prim = 5e-2;
+  stgs.tol_abs_dual = 1e-2;
+  stgs.tol_abs_prim = 1e-2;
 
   Klqr << 
   -0.123589f,0.123635f,0.285625f,-0.394876f,-0.419547f,-0.474536f,-0.073759f,0.072612f,0.186504f,-0.031569f,-0.038547f,-0.187738f,
