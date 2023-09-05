@@ -301,8 +301,8 @@ static void tinympcControllerTask(void* parameters) {
   startTimestamp = usecTimestamp();
 
   Eigen::Matrix<tinytype, 3, 1> obs_center;
-  obs_center << 0, 0, .7;
-  float r_obs = .5;
+  obs_center << 0, 0, .1;
+  float r_obs = 1;
 
   Eigen::Matrix<tinytype, 3, 1> xc;
   Eigen::Matrix<tinytype, 3, 1> a_norm;
@@ -352,7 +352,7 @@ static void tinympcControllerTask(void* parameters) {
           xc = obs_center - problem.x.col(i).head(3);
           a_norm = xc / xc.norm();
           params.A_constraints[i].head(3) = a_norm.transpose();
-          q_c = obs_center - r_obs*a_norm;
+          q_c = obs_center - r_obs * a_norm;
           params.x_max[i](0) = a_norm.transpose() * q_c;
         }
         // problem.dist = (params.A_constraints[0].head(3)).lazyProduct(problem.x.col(0).head(3)); // Distances can be computed in one step outside the for loop
@@ -371,10 +371,10 @@ static void tinympcControllerTask(void* parameters) {
       // MPC solve
       solve_admm(&problem, &params);
 
-      if (enable_traj) {
-        // DEBUG_PRINT("i: %d\n", problem.intersect);
-        DEBUG_PRINT("iters: %d\n", problem.iter);
-      }
+      // if (enable_traj) {
+      //   // DEBUG_PRINT("i: %d\n", problem.intersect);
+      //   DEBUG_PRINT("iters: %d\n", problem.iter);
+      // }
 
       // mpc_setpoint_task = problem.x.col(2);
       // mpc_setpoint_task = problem.x.col(12);
@@ -414,19 +414,20 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.mode.x = modeAbs;
     mpc_setpoint_pid.mode.y = modeAbs;
     mpc_setpoint_pid.mode.z = modeAbs;
-    mpc_setpoint_pid.position.x = mpc_setpoint(0);
-    mpc_setpoint_pid.position.y = mpc_setpoint(1);
-    mpc_setpoint_pid.position.z = mpc_setpoint(2);
-    mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
-    // mpc_setpoint_pid.position.x = 0;
-    // mpc_setpoint_pid.position.y = 0;
-    // mpc_setpoint_pid.position.z = 1;
-    // mpc_setpoint_pid.attitude.yaw = 0;
+    // mpc_setpoint_pid.position.x = mpc_setpoint(0);
+    // mpc_setpoint_pid.position.y = mpc_setpoint(1);
+    // mpc_setpoint_pid.position.z = mpc_setpoint(2);
+    // mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
+    mpc_setpoint_pid.position.x = 0;
+    mpc_setpoint_pid.position.y = 0;
+    mpc_setpoint_pid.position.z = 1;
+    mpc_setpoint_pid.attitude.yaw = 0;
 
-    // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-    //   DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-    //   // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-    // }
+    if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+      // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
+      // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+      DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+    }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
     // controllerPid(control, setpoint, sensors, state, tick);
