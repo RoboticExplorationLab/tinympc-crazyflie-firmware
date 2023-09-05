@@ -82,7 +82,7 @@ STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Macro variables, model dimensions in tinympc/types.h
 #define NHORIZON 10   // horizon steps (NHORIZON states and NHORIZON-1 controls)
-#define MPC_RATE RATE_100_HZ  // control frequency
+#define MPC_RATE RATE_50_HZ  // control frequency
 #define LQR_RATE RATE_500_HZ  // control frequency
 
 /* Include trajectory to track */
@@ -142,7 +142,7 @@ static tiny_AdmmWorkspace work;
 static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};  // cf1
+static float u_hover[4] = {0.75f, 0.75f, 0.7373f, 0.8f};  // cf1
 // static float u_hover[4] = {0.7467, 0.667f, 0.78, 0.7f};  // cf2 not correct
 static int8_t result = 0;
 static uint32_t step = 0;
@@ -256,7 +256,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 void controllerOutOfTreeInit(void) { 
   /* Start MPC initialization*/
   
-  en_traj = false;
+  en_traj = true;
   step = 0;  
   traj_iter = 0;
 
@@ -300,7 +300,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 30;           // limit this if needed
+  stgs.max_iter = 15;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 0;
   stgs.tol_abs_dual = 1e-2;
@@ -366,6 +366,12 @@ static void tinympcControllerTask(void* parameters) {
       updateInitialState(&sensors_task, &state_task);
 
       tiny_UpdateLinearCost(&work);
+      tiny_SolveAdmm(&work);
+      vTaskDelay(M2T(1));
+      tiny_SolveAdmm(&work);
+      vTaskDelay(M2T(1));
+      tiny_SolveAdmm(&work);
+      vTaskDelay(M2T(1));
       tiny_SolveAdmm(&work);
 
       mpcTime = usecTimestamp() - startTimestamp;
