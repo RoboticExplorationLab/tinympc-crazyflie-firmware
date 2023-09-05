@@ -76,7 +76,7 @@ extern "C" {
 // #include "quadrotor_100hz_ref_hover.hpp"
 // #include "quadrotor_50hz_ref_circle.hpp"
 // #include "quadrotor_50hz_ref_circle_2_5s.hpp"
-#include "quadrotor_50hz_line_5s.hpp"
+// #include "quadrotor_50hz_line_5s.hpp"
 // #include "quadrotor_50hz_line_8s.hpp"
 // #include "quadrotor_50hz_line_9s_xyz.hpp"
 
@@ -121,7 +121,7 @@ static tinytype u_hover[4] = {.65, .65, .65, .65};
 static struct tiny_cache cache;
 static struct tiny_params params;
 static struct tiny_problem problem;
-static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
 // static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Starting position for trajectory
 static tiny_VectorNu u_lqr;
@@ -134,6 +134,14 @@ static int max_traj_index = 0;
 static uint64_t startTimestamp;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
+
+// Obstacle constraint variables
+static Eigen::Matrix<tinytype, 3, 1> obs_center;
+static float r_obs = .5;
+
+static Eigen::Matrix<tinytype, 3, 1> xc;
+static Eigen::Matrix<tinytype, 3, 1> a_norm;
+static Eigen::Matrix<tinytype, 3, 1> q_c;
 
 
 static inline float quat_dot(quaternion_t a, quaternion_t b) {
@@ -237,17 +245,18 @@ void controllerOutOfTreeInit(void) {
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 20;
+  problem.max_iter = 5;
   problem.iters_check_rho_update = 10;
   problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
   // // Copy reference trajectory into Eigen matrix
-  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
   // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  // Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+  Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1,NHORIZON>();
+
 
   enable_traj = false;
   traj_index = 0;
@@ -268,7 +277,7 @@ void controllerOutOfTreeInit(void) {
 void UpdateHorizonReference(const setpoint_t *setpoint) {
   if (enable_traj) {
     if (traj_index < max_traj_index) {
-      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
       // params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
       traj_index++;
     }
@@ -300,14 +309,8 @@ static void tinympcControllerTask(void* parameters) {
 
   startTimestamp = usecTimestamp();
 
-  Eigen::Matrix<tinytype, 3, 1> obs_center;
-  obs_center << 0, 0, .1;
-  float r_obs = 1;
-
-  Eigen::Matrix<tinytype, 3, 1> xc;
-  Eigen::Matrix<tinytype, 3, 1> a_norm;
-  Eigen::Matrix<tinytype, 3, 1> q_c;
-
+  // obs_center << 0, 0, .1;
+  // float r_obs = .5;
 
   while (true) {
     // Update task data with most recent stabilizer loop data
@@ -327,7 +330,8 @@ static void tinympcControllerTask(void* parameters) {
       // Uncomment if following reference trajectory
       if (usecTimestamp() - startTimestamp > 1000000*5 && traj_index == 0) {
         DEBUG_PRINT("Enable trajectory!\n");
-        enable_traj = true;
+        // enable_traj = true; // Turn off when avoiding dynamic obstacle
+        traj_index = 1;
       }
 
       // TODO: predict into the future and set initial x to wherever we think we'll be
@@ -343,33 +347,56 @@ static void tinympcControllerTask(void* parameters) {
                           state_task.velocity.x, state_task.velocity.y, state_task.velocity.z,
                           radians(sensors_task.gyro.x), radians(sensors_task.gyro.y), radians(sensors_task.gyro.z);
 
-      // Get command reference
+      // Get command referen
+ce
       UpdateHorizonReference(&setpoint_task);
 
-      if (enable_traj) {
-        // Update constraint parameters
-        for (int i=0; i<NHORIZON; i++) {
-          xc = obs_center - problem.x.col(i).head(3);
-          a_norm = xc / xc.norm();
-          params.A_constraints[i].head(3) = a_norm.transpose();
-          q_c = obs_center - r_obs * a_norm;
-          params.x_max[i](0) = a_norm.transpose() * q_c;
-        }
-        // problem.dist = (params.A_constraints[0].head(3)).lazyProduct(problem.x.col(0).head(3)); // Distances can be computed in one step outside the for loop
-        // problem.dist -= params.x_max[0](0);
-        // DEBUG_PRINT("y: %.3f\n", problem.x.col(0)(1));
-        // DEBUG_PRINT("d: %.4f\n", problem.dist);
-        // DEBUG_PRINT("i: %d\n", problem.intersect);
-      } else {
-        for (int i=0; i<NHORIZON; i++) {
-            params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
-            params.x_max[i] = tiny_VectorNc::Constant(1000);
-            params.A_constraints[i] = tiny_MatrixNcNx::Zero();
-        }
+      obs_center(0) = setpoint_task.position.x;
+      obs_center(1) = setpoint_task.position.y;
+      obs_center(2) = setpoint_task.position.z;
+
+      // When avoiding obstacle while tracking trajectory
+      // if (enable_traj) {
+      //   // Update constraint parameters
+      //   for (int i=0; i<NHORIZON; i++) {
+      //     xc = obs_center - problem.x.col(i).head(3);
+      //     a_norm = xc / xc.norm();
+      //     params.A_constraints[i].head(3) = a_norm.transpose();
+      //     q_c = obs_center - r_obs * a_norm;
+      //     params.x_max[i](0) = a_norm.transpose() * q_c;
+      //   }
+      //   // problem.dist = (params.A_constraints[0].head(3)).lazyProduct(problem.x.col(0).head(3)); // Distances can be computed in one step outside the for loop
+      //   // problem.dist -= params.x_max[0](0);
+      //   // DEBUG_PRINT("y: %.3f\n", problem.x.col(0)(1));
+      //   // DEBUG_PRINT("d: %.4f\n", problem.dist);
+      //   // DEBUG_PRINT("i: %d\n", problem.intersect);
+      // } else {
+      //   for (int i=0; i<NHORIZON; i++) {
+      //       params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
+      //       params.x_max[i] = tiny_VectorNc::Constant(1000);
+      //       params.A_constraints[i] = tiny_MatrixNcNx::Zero();
+      //   }
+      // }
+
+      // When avoiding dynamic obstacle
+      for (int i=0; i<NHORIZON; i++) {
+        xc = obs_center - problem.x.col(i).head(3);
+        a_norm = xc / xc.norm();
+        params.A_constraints[i].head(3) = a_norm.transpose();
+        q_c = obs_center - r_obs * a_norm;
+        params.x_max[i](0) = a_norm.transpose() * q_c;
       }
 
       // MPC solve
       solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      DEBUG_PRINT("iters: %d\n", problem.iter);
 
       // if (enable_traj) {
       //   // DEBUG_PRINT("i: %d\n", problem.intersect);
@@ -377,8 +404,7 @@ static void tinympcControllerTask(void* parameters) {
       // }
 
       // mpc_setpoint_task = problem.x.col(2);
-      // mpc_setpoint_task = problem.x.col(12);
-      mpc_setpoint_task = problem.x.col(12);
+      mpc_setpoint_task = problem.x.col(10);
       // mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
       // mpc_setpoint_task(3) = problem.x.col(0)(2);
@@ -414,20 +440,20 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.mode.x = modeAbs;
     mpc_setpoint_pid.mode.y = modeAbs;
     mpc_setpoint_pid.mode.z = modeAbs;
-    // mpc_setpoint_pid.position.x = mpc_setpoint(0);
-    // mpc_setpoint_pid.position.y = mpc_setpoint(1);
-    // mpc_setpoint_pid.position.z = mpc_setpoint(2);
-    // mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
-    mpc_setpoint_pid.position.x = 0;
-    mpc_setpoint_pid.position.y = 0;
-    mpc_setpoint_pid.position.z = 1;
-    mpc_setpoint_pid.attitude.yaw = 0;
+    mpc_setpoint_pid.position.x = mpc_setpoint(0);
+    mpc_setpoint_pid.position.y = mpc_setpoint(1);
+    mpc_setpoint_pid.position.z = mpc_setpoint(2);
+    mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
+    // mpc_setpoint_pid.position.x = 0;
+    // mpc_setpoint_pid.position.y = 0;
+    // mpc_setpoint_pid.position.z = 1;
+    // mpc_setpoint_pid.attitude.yaw = 0;
 
-    if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+    // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
       // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
       // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-      DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
-    }
+      // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+    // }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
     // controllerPid(control, setpoint, sensors, state, tick);
