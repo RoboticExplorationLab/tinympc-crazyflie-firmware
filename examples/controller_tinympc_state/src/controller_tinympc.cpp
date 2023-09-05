@@ -302,8 +302,9 @@ void controllerOutOfTreeInit(void) {
   tiny_SetInputBound(&work, &Acu, &lcu, &ucu);
 
   tiny_SetStateConstraint(&work, &Acx, &lcx, &ucx);
-  Acx(2) = 1.0f;
-  ucx(0) = 0.9f;  // make it more aggressive
+  Acx << 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f;
+  ucx << 0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f;  
+  // make it more aggressive
 
   tiny_UpdateLinearCost(&work);
 
