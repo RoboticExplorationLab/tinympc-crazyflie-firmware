@@ -237,16 +237,16 @@ void controllerOutOfTreeInit(void) {
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 20;
+  problem.max_iter = 10;
   problem.iters_check_rho_update = 10;
   problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
   // // Copy reference trajectory into Eigen matrix
   Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
   // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  // Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+  Xref_origin << 0, -0.5, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1,NHORIZON>();
 
   enable_traj = false;
@@ -301,8 +301,8 @@ static void tinympcControllerTask(void* parameters) {
   startTimestamp = usecTimestamp();
 
   Eigen::Matrix<tinytype, 3, 1> obs_center;
-  obs_center << 0, 0, .1;
-  float r_obs = 1;
+  obs_center << 0, 0, 1.0;
+  float r_obs = 0.5;
 
   Eigen::Matrix<tinytype, 3, 1> xc;
   Eigen::Matrix<tinytype, 3, 1> a_norm;
@@ -325,10 +325,10 @@ static void tinympcControllerTask(void* parameters) {
       nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
       // Uncomment if following reference trajectory
-      if (usecTimestamp() - startTimestamp > 1000000*5 && traj_index == 0) {
-        DEBUG_PRINT("Enable trajectory!\n");
-        enable_traj = true;
-      }
+      // if (usecTimestamp() - startTimestamp > 1000000*5 && traj_index == 0) {
+      //   DEBUG_PRINT("Enable trajectory!\n");
+      //   enable_traj = true;
+      // }
 
       // TODO: predict into the future and set initial x to wherever we think we'll be
       //    by the time we're done computing the input for that state. If we just set
@@ -370,10 +370,20 @@ static void tinympcControllerTask(void* parameters) {
 
       // MPC solve
       solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      // vTaskDelay(M2T(1));
+      // solve_admm(&problem, &params);
 
       // if (enable_traj) {
       //   // DEBUG_PRINT("i: %d\n", problem.intersect);
-      //   DEBUG_PRINT("iters: %d\n", problem.iter);
+      // DEBUG_PRINT("iters: %d\n", problem.iter);
       // }
 
       // mpc_setpoint_task = problem.x.col(2);
@@ -426,7 +436,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
       // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
       // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-      DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+      // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
     }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
