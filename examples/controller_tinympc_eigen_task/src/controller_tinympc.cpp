@@ -189,17 +189,17 @@ extern "C"
     controllerPidInit();
 
     // Copy cache data from problem_data/quadrotor*.hpp
-    cache.Adyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
-    cache.Bdyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
-    cache.rho[0] = rho_value;
-    cache.Kinf[0] = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_data);
-    cache.Pinf[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_data);
-    cache.Quu_inv[0] = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_data);
-    cache.AmBKt[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_data);
-    cache.coeff_d2p[0] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_data);
+    cache.Adyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_unconstrained_data);
+    cache.Bdyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_unconstrained_data);
+    cache.rho[0] = rho_unconstrained_value;
+    cache.Kinf[0] = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_unconstrained_data);
+    cache.Pinf[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_unconstrained_data);
+    cache.Quu_inv[0] = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_unconstrained_data);
+    cache.AmBKt[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_unconstrained_data);
+    cache.coeff_d2p[0] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_unconstrained_data);
 
-    cache.Adyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
-    cache.Bdyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
+    cache.Adyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_constrained_data);
+    cache.Bdyn[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_constrained_data);
     cache.rho[1] = rho_constrained_value;
     cache.Kinf[1] = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_constrained_data);
     cache.Pinf[1] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_constrained_data);
@@ -208,9 +208,9 @@ extern "C"
     cache.coeff_d2p[1] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(coeff_d2p_constrained_data);
 
     // Copy parameter data
-    params.Q[0] = Eigen::Map<tiny_VectorNx>(Q_data);
-    params.Qf[0] = Eigen::Map<tiny_VectorNx>(Qf_data);
-    params.R[0] = Eigen::Map<tiny_VectorNu>(R_data);
+    params.Q[0] = Eigen::Map<tiny_VectorNx>(Q_unconstrained_data);
+    params.Qf[0] = Eigen::Map<tiny_VectorNx>(Qf_unconstrained_data);
+    params.R[0] = Eigen::Map<tiny_VectorNu>(R_unconstrained_data);
     params.Q[1] = Eigen::Map<tiny_VectorNx>(Q_constrained_data);
     params.Qf[1] = Eigen::Map<tiny_VectorNx>(Qf_constrained_data);
     params.R[1] = Eigen::Map<tiny_VectorNu>(R_constrained_data);
@@ -253,7 +253,7 @@ extern "C"
     problem.abs_tol = 0.001;
     problem.status = 0;
     problem.iter = 0;
-    problem.max_iter = 1;
+    problem.max_iter = 5;
     problem.iters_check_rho_update = 10;
     problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
@@ -343,13 +343,13 @@ extern "C"
       {
         nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
+        // Comment out when avoiding dynamic obstacle
         // Uncomment if following reference trajectory
-        if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
-        {
-          DEBUG_PRINT("Enable trajectory!\n");
-          // enable_traj = true; // Turn off when avoiding dynamic obstacle
-          traj_index = 1;
-        }
+        // if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
+        // {
+        //   DEBUG_PRINT("Enable trajectory!\n");
+        //   // enable_traj = true; 
+        // }
 
         // TODO: predict into the future and set initial x to wherever we think we'll be
         //    by the time we're done computing the input for that state. If we just set
@@ -366,10 +366,6 @@ extern "C"
 
         // Get command reference
         UpdateHorizonReference(&setpoint_task);
-
-        obs_center(0) = setpoint_task.position.x;
-        obs_center(1) = setpoint_task.position.y;
-        obs_center(2) = setpoint_task.position.z;
 
         // When avoiding obstacle while tracking trajectory
         // if (enable_traj) {
@@ -394,6 +390,10 @@ extern "C"
         //   }
         // }
 
+        obs_center(0) = setpoint_task.position.x;
+        obs_center(1) = setpoint_task.position.y;
+        obs_center(2) = setpoint_task.position.z;
+
         // When avoiding dynamic obstacle
         for (int i = 0; i < NHORIZON; i++)
         {
@@ -414,7 +414,7 @@ extern "C"
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
-        DEBUG_PRINT("iters: %d\n", problem.iter);
+        // DEBUG_PRINT("iters: %d\n", problem.iter);
 
         // if (enable_traj) {
         //   // DEBUG_PRINT("i: %d\n", problem.intersect);
@@ -426,7 +426,7 @@ extern "C"
         // mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
-        // mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+        mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
         // mpc_setpoint_task(4) = problem.x.col(3)(2);
@@ -469,11 +469,11 @@ extern "C"
       // mpc_setpoint_pid.position.z = 1;
       // mpc_setpoint_pid.attitude.yaw = 0;
 
-      // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-      // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-      // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-      // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
-      // }
+      if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+        // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
+        DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+        // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+      }
 
       controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
       // controllerPid(control, setpoint, sensors, state, tick);
