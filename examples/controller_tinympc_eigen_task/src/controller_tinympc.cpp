@@ -253,7 +253,7 @@ extern "C"
     problem.abs_tol = 0.001;
     problem.status = 0;
     problem.iter = 0;
-    problem.max_iter = 5;
+    problem.max_iter = 1;
     problem.iters_check_rho_update = 10;
     problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
@@ -413,7 +413,8 @@ extern "C"
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
-        // DEBUG_PRINT("iters: %d\n", problem.iter);
+        solve_admm(&problem, &params);
+        DEBUG_PRINT("iters: %d\n", problem.iter);
 
         // if (enable_traj) {
         //   // DEBUG_PRINT("i: %d\n", problem.intersect);
