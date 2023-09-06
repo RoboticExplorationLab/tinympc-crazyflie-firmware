@@ -263,6 +263,7 @@ static void stabilizerTask(void* param)
   while(1) {
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
+    sensorsWaitDataReady();
     // tick++;
 
     // update sensorData struct (for logging variables)
