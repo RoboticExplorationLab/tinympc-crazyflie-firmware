@@ -49,6 +49,7 @@ extern "C"
 #include "sensors.h"
 #include "static_mem.h"
 #include "system.h"
+#include "eventtrigger.h"
 
 #include "controller.h"
 #include "physicalConstants.h"
@@ -100,6 +101,11 @@ extern "C"
   static void tinympcControllerTask(void *parameters);
 
   STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
+
+  // Declares eventTrigger
+  EVENTTRIGGER(horizon_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
+  EVENTTRIGGER(horizon_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
+  EVENTTRIGGER(horizon_part3, float, h10, float, h11, float, h12, float, h13, float, h14);  
 
   // Structs to keep track of data sent to and received by stabilizer loop
   // Stabilizer loop updates/uses these
@@ -185,7 +191,14 @@ extern "C"
 
   void controllerOutOfTreeInit(void)
   {
-
+    // // Copy reference trajectory into Eigen matrix
+    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
+    // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+    // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+    Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+    params.Xref = Xref_origin.replicate<1, NHORIZON>();
+    mpc_setpoint = Xref_origin;
     controllerPidInit();
 
     // Copy cache data from problem_data/quadrotor*.hpp
@@ -227,7 +240,7 @@ extern "C"
     // params.x_min = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(-99999);
     // params.x_max = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(99999);
     // params.A_constraints = Matrix<tinytype, NHORIZON, NSTATES>::Zero();
-    params.Xref = tiny_MatrixNxNh::Zero();
+    // params.Xref = tiny_MatrixNxNh::Zero();
     params.Uref = tiny_MatrixNuNhm1::Zero();
     params.cache = cache;
 
@@ -250,21 +263,13 @@ extern "C"
     problem.primal_residual_input = 0;
     problem.dual_residual_state = 0;
     problem.dual_residual_input = 0;
-    problem.abs_tol = 0.001;
+    problem.abs_tol = 0.01;
     problem.status = 0;
     problem.iter = 0;
-    problem.max_iter = 6;
-    problem.check_termination = 5;
+    problem.max_iter = 5;
+    problem.check_termination = 1;
     problem.iters_check_rho_update = 10;
     problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
-
-    // // Copy reference trajectory into Eigen matrix
-    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
-    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-    // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-    // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-    Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
-    params.Xref = Xref_origin.replicate<1, NHORIZON>();
 
     enable_traj = false;
     traj_index = 0;
@@ -305,7 +310,7 @@ extern "C"
       //                     setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z,
       //                     radians(setpoint->attitudeRate.roll), radians(setpoint->attitudeRate.pitch), radians(setpoint->attitudeRate.yaw)};
       // params.Xref = xg.replicate<1,NHORIZON>();
-      params.Xref = Xref_origin.replicate<1, NHORIZON>();
+      // params.Xref = Xref_origin.replicate<1, NHORIZON>();
     }
   }
 
@@ -428,7 +433,8 @@ extern "C"
         // mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
-        mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+        // mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+        DEBUG_PRINT("zh: %.4f\n", mpc_setpoint_task(2));
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
         // mpc_setpoint_task(4) = problem.x.col(3)(2);
@@ -458,10 +464,6 @@ extern "C"
 
     if (RATE_DO_EXECUTE(LOWLEVEL_RATE, tick))
     {
-      if (isInit == false) {
-        mpc_setpoint = Xref_origin;
-      }
-
       mpc_setpoint_pid.mode.yaw = modeAbs;
       mpc_setpoint_pid.mode.x = modeAbs;
       mpc_setpoint_pid.mode.y = modeAbs;
@@ -475,11 +477,11 @@ extern "C"
       // mpc_setpoint_pid.position.z = 1;
       // mpc_setpoint_pid.attitude.yaw = 0;
 
-      if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+      // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
         // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-        DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+      DEBUG_PRINT("zl: %.4f\n", mpc_setpoint(2));
         // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
-      }
+      // }
 
       controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
       // controllerPid(control, setpoint, sensors, state, tick);
