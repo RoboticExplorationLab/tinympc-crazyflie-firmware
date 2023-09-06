@@ -190,12 +190,12 @@ extern "C"
     // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
     // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
     // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+
+    controllerPidInit();
     Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
     params.Xref = Xref_origin.replicate<1, NHORIZON>();
     problem.x = Xref_origin.replicate<1, NHORIZON>();
-    mpc_setpoint = Xref_origin;
-    controllerPidInit();
-
+    mpc_setpoint << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0;
     // Copy cache data from problem_data/quadrotor*.hpp
     cache.Adyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_unconstrained_data);
     cache.Bdyn[0] = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_unconstrained_data);
@@ -254,13 +254,13 @@ extern "C"
     problem.znew = tiny_MatrixNuNhm1::Zero();
     problem.y = tiny_MatrixNuNhm1::Zero();
 
-    // problem.primal_residual_state = 0;
-    // problem.primal_residual_input = 0;
-    // problem.dual_residual_state = 0;
-    // problem.dual_residual_input = 0;
+    problem.primal_residual_state = 0;
+    problem.primal_residual_input = 0;
+    problem.dual_residual_state = 0;
+    problem.dual_residual_input = 0;
     problem.abs_tol = 0.01;
-    // problem.status = 0;
-    // problem.iter = 0;
+    problem.status = 0;
+    problem.iter = 0;
     problem.max_iter = 5;
     problem.check_termination = 2;
     problem.iters_check_rho_update = 10;
@@ -405,7 +405,7 @@ extern "C"
           q_c = obs_center - r_obs * a_norm;
           params.x_max[i](0) = a_norm.transpose() * q_c;
         }
-        DEBUG_PRINT("t=%ld\n", usecTimestamp() - startTimestamp);
+        // DEBUG_PRINT("t=%ld\n", usecTimestamp() - startTimestamp);
 
         // MPC solve
         // startTimestamp = usecTimestamp();
@@ -420,7 +420,7 @@ extern "C"
         vTaskDelay(M2T(1));  
         solve_admm(&problem, &params);
         // DEBUG_PRINT("t=%ld\n", usecTimestamp() - startTimestamp);
-        DEBUG_PRINT("i=%d\n", problem.iter);
+        // DEBUG_PRINT("i=%d\n", problem.iter);
 
         // if (enable_traj) {
         //   // DEBUG_PRINT("i: %d\n", problem.intersect);
