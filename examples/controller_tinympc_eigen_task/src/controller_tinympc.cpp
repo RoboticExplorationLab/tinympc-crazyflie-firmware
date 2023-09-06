@@ -185,7 +185,15 @@ extern "C"
 
   void controllerOutOfTreeInit(void)
   {
-
+    // // Copy reference trajectory into Eigen matrix
+    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
+    // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+    // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+    Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+    params.Xref = Xref_origin.replicate<1, NHORIZON>();
+    problem.x = Xref_origin.replicate<1, NHORIZON>();
+    mpc_setpoint = Xref_origin;
     controllerPidInit();
 
     // Copy cache data from problem_data/quadrotor*.hpp
@@ -246,24 +254,17 @@ extern "C"
     problem.znew = tiny_MatrixNuNhm1::Zero();
     problem.y = tiny_MatrixNuNhm1::Zero();
 
-    problem.primal_residual_state = 0;
-    problem.primal_residual_input = 0;
-    problem.dual_residual_state = 0;
-    problem.dual_residual_input = 0;
-    problem.abs_tol = 0.001;
-    problem.status = 0;
-    problem.iter = 0;
+    // problem.primal_residual_state = 0;
+    // problem.primal_residual_input = 0;
+    // problem.dual_residual_state = 0;
+    // problem.dual_residual_input = 0;
+    problem.abs_tol = 0.01;
+    // problem.status = 0;
+    // problem.iter = 0;
     problem.max_iter = 5;
+    problem.check_termination = 2;
     problem.iters_check_rho_update = 10;
     problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
-
-    // // Copy reference trajectory into Eigen matrix
-    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
-    // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-    // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-    // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-    Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
-    params.Xref = Xref_origin.replicate<1, NHORIZON>();
 
     enable_traj = false;
     traj_index = 0;
@@ -304,7 +305,7 @@ extern "C"
       //                     setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z,
       //                     radians(setpoint->attitudeRate.roll), radians(setpoint->attitudeRate.pitch), radians(setpoint->attitudeRate.yaw)};
       // params.Xref = xg.replicate<1,NHORIZON>();
-      params.Xref = Xref_origin.replicate<1, NHORIZON>();
+      // params.Xref = Xref_origin.replicate<1, NHORIZON>();
     }
   }
 
@@ -348,7 +349,7 @@ extern "C"
         // if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
         // {
         //   DEBUG_PRINT("Enable trajectory!\n");
-        //   // enable_traj = true; 
+        //   // enable_traj = true;
         // }
 
         // TODO: predict into the future and set initial x to wherever we think we'll be
@@ -395,6 +396,7 @@ extern "C"
         obs_center(2) = setpoint_task.position.z;
 
         // When avoiding dynamic obstacle
+        startTimestamp = usecTimestamp();
         for (int i = 0; i < NHORIZON; i++)
         {
           xc = obs_center - problem.x.col(i).head(3);
@@ -403,8 +405,11 @@ extern "C"
           q_c = obs_center - r_obs * a_norm;
           params.x_max[i](0) = a_norm.transpose() * q_c;
         }
+        DEBUG_PRINT("t=%ld\n", usecTimestamp() - startTimestamp);
 
         // MPC solve
+        // startTimestamp = usecTimestamp();
+        problem.iter = 0;  // reset iteration counter here
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
@@ -412,9 +417,10 @@ extern "C"
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
-        vTaskDelay(M2T(1));
+        vTaskDelay(M2T(1));  
         solve_admm(&problem, &params);
-        // DEBUG_PRINT("iters: %d\n", problem.iter);
+        // DEBUG_PRINT("t=%ld\n", usecTimestamp() - startTimestamp);
+        DEBUG_PRINT("i=%d\n", problem.iter);
 
         // if (enable_traj) {
         //   // DEBUG_PRINT("i: %d\n", problem.intersect);
@@ -426,7 +432,7 @@ extern "C"
         // mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
-        mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+        mpc_setpoint_task(4) = problem.x.col(NHORIZON - 1)(2);
 
         // mpc_setpoint_task(3) = problem.x.col(0)(2);
         // mpc_setpoint_task(4) = problem.x.col(3)(2);
@@ -469,9 +475,10 @@ extern "C"
       // mpc_setpoint_pid.position.z = 1;
       // mpc_setpoint_pid.attitude.yaw = 0;
 
-      if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+      if (RATE_DO_EXECUTE(RATE_25_HZ, tick))
+      {
         // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-        DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+        // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
         // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
       }
 
