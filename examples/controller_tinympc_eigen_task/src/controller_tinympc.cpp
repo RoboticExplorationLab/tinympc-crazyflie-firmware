@@ -253,7 +253,8 @@ extern "C"
     problem.abs_tol = 0.001;
     problem.status = 0;
     problem.iter = 0;
-    problem.max_iter = 5;
+    problem.max_iter = 6;
+    problem.check_termination = 5;
     problem.iters_check_rho_update = 10;
     problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
@@ -405,6 +406,7 @@ extern "C"
         }
 
         // MPC solve
+        problem.iter = 0;
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
@@ -414,7 +416,7 @@ extern "C"
         solve_admm(&problem, &params);
         vTaskDelay(M2T(1));
         solve_admm(&problem, &params);
-        // DEBUG_PRINT("iters: %d\n", problem.iter);
+        DEBUG_PRINT("i: %d\n", problem.iter);
 
         // if (enable_traj) {
         //   // DEBUG_PRINT("i: %d\n", problem.intersect);
@@ -456,6 +458,10 @@ extern "C"
 
     if (RATE_DO_EXECUTE(LOWLEVEL_RATE, tick))
     {
+      if (isInit == false) {
+        mpc_setpoint = Xref_origin;
+      }
+
       mpc_setpoint_pid.mode.yaw = modeAbs;
       mpc_setpoint_pid.mode.x = modeAbs;
       mpc_setpoint_pid.mode.y = modeAbs;
