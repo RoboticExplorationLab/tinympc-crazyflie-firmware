@@ -111,6 +111,7 @@ EVENTTRIGGER(xref_event, float, xref_z);
 EVENTTRIGGER(iters_event, int32, iters);
 EVENTTRIGGER(cache_level_event, int32, level);
 
+
 // Structs to keep track of data sent to and received by stabilizer loop
 // Stabilizer loop updates/uses these
 control_t control_data;
@@ -354,13 +355,6 @@ static void tinympcControllerTask(void *parameters)
     {
       nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
-      // Don't warm start dual variables
-      problem.y = tiny_MatrixNuNhm1::Zero();
-      if (problem.cache_level == 0) {
-        // Do warm start state constraint dual when avoiding obstacle - better performance
-        problem.g = tiny_MatrixNxNh::Zero();
-      }
-
       // Comment out when avoiding dynamic obstacle
       // Uncomment if following reference trajectory
       if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
@@ -385,8 +379,6 @@ static void tinympcControllerTask(void *parameters)
       // Get command reference
       UpdateHorizonReference(&setpoint_task);
 
-
-
       obs_center(0) = setpoint_task.position.x;
       obs_center(1) = setpoint_task.position.y;
       obs_center(2) = setpoint_task.position.z;
@@ -394,8 +386,6 @@ static void tinympcControllerTask(void *parameters)
       obs_velocity(0) = setpoint_task.velocity.x;
       obs_velocity(1) = setpoint_task.velocity.y;
       obs_velocity(2) = setpoint_task.velocity.z;
-
-
 
       // When avoiding obstacle while tracking trajectory
       if (enable_traj) {
@@ -458,9 +448,6 @@ static void tinympcControllerTask(void *parameters)
       eventTrigger(&eventTrigger_horizon_part1);
       eventTrigger(&eventTrigger_horizon_part2);
       eventTrigger(&eventTrigger_horizon_part3);
-      eventTrigger(&eventTrigger_xref_event);
-      eventTrigger(&eventTrigger_iters_event);
-      eventTrigger(&eventTrigger_cache_level_event);
 
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
       xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -494,14 +481,11 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.position.z = mpc_setpoint(2);
     mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
 
-    // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-    //   // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-    //   // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-    //   // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
-    //   if (mpc_setpoint(4) == 1) {
-    //     DEBUG_PRINT("cache level == 1\n");
-    //   }
-    // }
+    if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+      // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
+      DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+      // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+    }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
   }
