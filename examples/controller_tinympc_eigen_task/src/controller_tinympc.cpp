@@ -78,7 +78,7 @@ extern "C"
 // #include "quadrotor_100hz_ref_hover.hpp"
 // #include "quadrotor_50hz_ref_circle.hpp"
 // #include "quadrotor_50hz_ref_circle_2_5s.hpp"
-// #include "quadrotor_50hz_line_5s.hpp"
+#include "quadrotor_50hz_line_5s.hpp"
 // #include "quadrotor_50hz_line_8s.hpp"
 // #include "quadrotor_50hz_line_9s_xyz.hpp"
 
@@ -135,7 +135,7 @@ static struct tiny_problem problem;
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
 static float init_vel_z;
-// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
 // static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Starting position for trajectory
 static tiny_VectorNu u_lqr;
@@ -253,17 +253,12 @@ void controllerOutOfTreeInit(void)
   params.R[1] = Eigen::Map<tiny_VectorNu>(R_constrained_data);
   params.u_min = tiny_VectorNu(-u_hover[0], -u_hover[1], -u_hover[2], -u_hover[3]).replicate<1, NHORIZON - 1>();
   params.u_max = tiny_VectorNu(1 - u_hover[0], 1 - u_hover[1], 1 - u_hover[2], 1 - u_hover[3]).replicate<1, NHORIZON - 1>();
-  // params.u_min = tiny_MatrixNuNhm1::Constant(-0.5);
-  // params.u_max = tiny_MatrixNuNhm1::Constant(0.5);
   for (int i = 0; i < NHORIZON; i++)
   {
     params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
     params.x_max[i] = tiny_VectorNc::Constant(1000);
     params.A_constraints[i] = tiny_MatrixNcNx::Zero();
   }
-  // params.x_min = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(-99999);
-  // params.x_max = Matrix<tinytype, NHORIZON, NSTATE_CONSTRAINTS>::Constant(99999);
-  // params.A_constraints = Matrix<tinytype, NHORIZON, NSTATES>::Zero();
   params.Xref = tiny_MatrixNxNh::Zero();
   params.Uref = tiny_MatrixNuNhm1::Zero();
   params.cache = cache;
@@ -283,11 +278,11 @@ void controllerOutOfTreeInit(void)
   problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
   // // Copy reference trajectory into Eigen matrix
-  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
   // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+  // Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1, NHORIZON>();
 
   enable_traj = false;
@@ -312,7 +307,7 @@ static void UpdateHorizonReference(const setpoint_t *setpoint)
   {
     if (traj_index < max_traj_index)
     {
-      // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
       // params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
       traj_index++;
     }
@@ -323,12 +318,6 @@ static void UpdateHorizonReference(const setpoint_t *setpoint)
   }
   else
   {
-    // phi = quat_2_rp(normalize_quat(setpoint->attitudeQuaternion));  // quaternion to Rodrigues parameters
-    // tiny_VectorNx xg = {setpoint->position.x, setpoint->position.y, setpoint->position.z,
-    //                     phi.x, phi.y, phi.z,
-    //                     setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z,
-    //                     radians(setpoint->attitudeRate.roll), radians(setpoint->attitudeRate.pitch), radians(setpoint->attitudeRate.yaw)};
-    // params.Xref = xg.replicate<1,NHORIZON>();
     params.Xref = Xref_origin.replicate<1, NHORIZON>();
   }
 }
@@ -348,9 +337,6 @@ static void tinympcControllerTask(void *parameters)
 
   startTimestamp = usecTimestamp();
 
-  // obs_center << 0, 0, .1;
-  // float r_obs = .5;
-
   while (true)
   {
     // Update task data with most recent stabilizer loop data
@@ -368,38 +354,20 @@ static void tinympcControllerTask(void *parameters)
     {
       nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
-      // if (mpc_steps_taken % 50 == 0) {
-      //   // resetProblem();
-      //   // problem.x = tiny_MatrixNxNh::Zero();
-      //   // problem.q = tiny_MatrixNxNh::Zero();
-      //   // problem.p = tiny_MatrixNxNh::Zero(); // helps a little
-      //   // problem.v = tiny_MatrixNxNh::Zero();
-      //   // problem.vnew = tiny_MatrixNxNh::Zero();
-      //   problem.g = tiny_MatrixNxNh::Zero();
-
-      //   // problem.u = tiny_MatrixNuNhm1::Zero();
-      //   // problem.r = tiny_MatrixNuNhm1::Zero();
-      //   // problem.d = tiny_MatrixNuNhm1::Zero(); // helps a little
-      //   // problem.z = tiny_MatrixNuNhm1::Zero();
-      //   // problem.znew = tiny_MatrixNuNhm1::Zero();
-      //   problem.y = tiny_MatrixNuNhm1::Zero();
-      // }
-      // mpc_steps_taken++;
-
+      // Don't warm start dual variables
+      problem.y = tiny_MatrixNuNhm1::Zero();
       if (problem.cache_level == 0) {
+        // Do warm start state constraint dual when avoiding obstacle - better performance
         problem.g = tiny_MatrixNxNh::Zero();
-        problem.y = tiny_MatrixNuNhm1::Zero();
       }
-      // problem.g = tiny_MatrixNxNh::Zero();
-      // problem.y = tiny_MatrixNuNhm1::Zero();
 
       // Comment out when avoiding dynamic obstacle
       // Uncomment if following reference trajectory
-      // if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
-      // {
-      //   DEBUG_PRINT("Enable trajectory!\n");
-      //   // enable_traj = true; 
-      // }
+      if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
+      {
+        DEBUG_PRINT("Enable trajectory!\n");
+        enable_traj = true; 
+      }
 
       // TODO: predict into the future and set initial x to wherever we think we'll be
       //    by the time we're done computing the input for that state. If we just set
@@ -417,28 +385,7 @@ static void tinympcControllerTask(void *parameters)
       // Get command reference
       UpdateHorizonReference(&setpoint_task);
 
-      // When avoiding obstacle while tracking trajectory
-      // if (enable_traj) {
-      //   // Update constraint parameters
-      //   for (int i=0; i<NHORIZON; i++) {
-      //     xc = obs_center - problem.x.col(i).head(3);
-      //     a_norm = xc / xc.norm();
-      //     params.A_constraints[i].head(3) = a_norm.transpose();
-      //     q_c = obs_center - r_obs * a_norm;
-      //     params.x_max[i](0) = a_norm.transpose() * q_c;
-      //   }
-      //   // problem.dist = (params.A_constraints[0].head(3)).lazyProduct(problem.x.col(0).head(3)); // Distances can be computed in one step outside the for loop
-      //   // problem.dist -= params.x_max[0](0);
-      //   // DEBUG_PRINT("y: %.3f\n", problem.x.col(0)(1));
-      //   // DEBUG_PRINT("d: %.4f\n", problem.dist);
-      //   // DEBUG_PRINT("i: %d\n", problem.intersect);
-      // } else {
-      //   for (int i=0; i<NHORIZON; i++) {
-      //       params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
-      //       params.x_max[i] = tiny_VectorNc::Constant(1000);
-      //       params.A_constraints[i] = tiny_MatrixNcNx::Zero();
-      //   }
-      // }
+
 
       obs_center(0) = setpoint_task.position.x;
       obs_center(1) = setpoint_task.position.y;
@@ -450,48 +397,43 @@ static void tinympcControllerTask(void *parameters)
 
 
 
-      // When avoiding dynamic obstacle
-      for (int i = 0; i < NHORIZON; i++)
-      {
-        obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale;
-        xc = obs_center - problem.x.col(i).head(3);
-        a_norm = xc / xc.norm();
-        params.A_constraints[i].head(3) = a_norm.transpose();
-        q_c = obs_center - r_obs * a_norm;
-        params.x_max[i](0) = a_norm.transpose() * q_c;
+      // When avoiding obstacle while tracking trajectory
+      if (enable_traj) {
+        // Update constraint parameters
+        for (int i=0; i<NHORIZON; i++) {
+          obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale;
+          xc = obs_predicted_center - problem.x.col(i).head(3);
+          a_norm = xc / xc.norm();
+          params.A_constraints[i].head(3) = a_norm.transpose();
+          q_c = obs_center - r_obs * a_norm;
+          params.x_max[i](0) = a_norm.transpose() * q_c;
+        }
+      } else {
+        for (int i=0; i<NHORIZON; i++) {
+            params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
+            params.x_max[i] = tiny_VectorNc::Constant(1000);
+            params.A_constraints[i] = tiny_MatrixNcNx::Zero();
+        }
       }
+
+      // // When avoiding dynamic obstacle
+      // for (int i = 0; i < NHORIZON; i++)
+      // {
+      //   obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale;
+      //   xc = obs_center - problem.x.col(i).head(3);
+      //   a_norm = xc / xc.norm();
+      //   params.A_constraints[i].head(3) = a_norm.transpose();
+      //   q_c = obs_center - r_obs * a_norm;
+      //   params.x_max[i](0) = a_norm.transpose() * q_c;
+      // }
 
       // MPC solve
       problem.iter = 0;
       solve_admm(&problem, &params);
       vTaskDelay(M2T(1));
       solve_admm(&problem, &params);
-      // vTaskDelay(M2T(1));
-      // solve_admm(&problem, &params);
-      // vTaskDelay(M2T(1));
-      // solve_admm(&problem, &params);
-      // vTaskDelay(M2T(1));
-      // solve_admm(&problem, &params);
-      // DEBUG_PRINT("iters: %d\n", problem.iter);
-
-      // if (enable_traj) {
-      //   // DEBUG_PRINT("i: %d\n", problem.intersect);
-      //   DEBUG_PRINT("iters: %d\n", problem.iter);
-      // }
-
-      // mpc_setpoint_task = problem.x.col(2);
-      // mpc_setpoint_task = problem.x.col(10);
+      
       mpc_setpoint_task = problem.x.col(NHORIZON-1);
-
-      // mpc_setpoint_task(3) = problem.x.col(0)(2);
-      // mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
-      mpc_setpoint_task(4) = (float)problem.cache_level;
-
-      // mpc_setpoint_task(3) = problem.x.col(0)(2);
-      // mpc_setpoint_task(4) = problem.x.col(3)(2);
-
-      // mpc_setpoint_task(3) = (float)(problem.iter);
-      // mpc_setpoint_task(4) = params.Xref.col(NHORIZON-1)(2);
 
       eventTrigger_horizon_part1_payload.h0 = problem.x.col(0)(2);
       eventTrigger_horizon_part1_payload.h1 = problem.x.col(1)(2);
@@ -510,9 +452,7 @@ static void tinympcControllerTask(void *parameters)
       eventTrigger_horizon_part3_payload.h14 = problem.x.col(14)(2);
 
       eventTrigger_xref_event_payload.xref_z = params.Xref.col(NHORIZON-1)(2);
-
       eventTrigger_iters_event_payload.iters = problem.iter;
-      
       eventTrigger_cache_level_event_payload.level = problem.cache_level;
 
       eventTrigger(&eventTrigger_horizon_part1);
@@ -525,8 +465,6 @@ static void tinympcControllerTask(void *parameters)
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
       xSemaphoreTake(dataMutex, portMAX_DELAY);
       memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
-      // memcpy(&problem_x, &problem.x, sizeof(tiny_VectorNx)*NHORIZON);
-      // memcpy(&horizon_nh_z, &problem.x.col(NHORIZON-1)(2), sizeof(float));
       memcpy(&init_vel_z, &problem.x.col(0)(8), sizeof(float));
       xSemaphoreGive(dataMutex);
     }
@@ -555,10 +493,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.position.y = mpc_setpoint(1);
     mpc_setpoint_pid.position.z = mpc_setpoint(2);
     mpc_setpoint_pid.attitude.yaw = mpc_setpoint(5);
-    // mpc_setpoint_pid.position.x = 0;
-    // mpc_setpoint_pid.position.y = 0;
-    // mpc_setpoint_pid.position.z = 1;
-    // mpc_setpoint_pid.attitude.yaw = 0;
 
     // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
     //   // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
@@ -570,7 +504,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     // }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
-    // controllerPid(control, setpoint, sensors, state, tick);
   }
 
   // if (RATE_DO_EXECUTE(LQR_RATE, tick)) {
@@ -605,16 +538,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   xSemaphoreGive(runTaskSemaphore);
 }
 
-// PARAM_GROUP_START(ctrlMPC)
-/**
- * @brief K gain
- */
-// PARAM_ADD(PARAM_FLOAT, u_hover, &u_hover)
-// PARAM_ADD(PARAM_FLOAT, test_enable, &test_enable)
-// PARAM_ADD(PARAM_FLOAT, testparam, &testparam)
-
-// PARAM_GROUP_STOP(ctrlMPC)
-
 /**
  * Logging variables for the command and reference signals for the
  * MPC controller
@@ -623,22 +546,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 LOG_GROUP_START(tinympc)
 
 LOG_ADD(LOG_FLOAT, initial_velocity, &init_vel_z)
-
-// // LOG_ADD(LOG_FLOAT, horizon_nh_z, problem_x.col(NHORIZON-1))
-// LOG_ADD(LOG_FLOAT, horizon_nh_z, &horizon_nh_z)
-
-// // LOG_ADD(LOG_INT8, result, &result)
-// // LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
-
-// // LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-// // LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
-// // LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
-// // LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
-
-// // LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
-// // LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
-// // LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
-// // LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
 LOG_GROUP_STOP(tinympc)
 
