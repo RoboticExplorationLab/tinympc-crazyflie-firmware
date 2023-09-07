@@ -87,7 +87,7 @@ extern "C"
 #include "debug.h"
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
-#define MPC_RATE RATE_50_HZ
+#define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 
   // Semaphore to signal that we got data from the stabilizer loop to process
@@ -123,7 +123,8 @@ extern "C"
   tiny_VectorNx mpc_setpoint_task;
 
   /* Allocate global variables for MPC */
-  static tinytype u_hover[4] = {.65, .65, .65, .65};
+  // static tinytype u_hover[4] = {.65, .65, .65, .65};  // small cf
+  tinytype u_hover[4] = {.8, .8, .8, .8};  // big cf
   static struct tiny_cache cache;
   static struct tiny_params params;
   static struct tiny_problem problem;
@@ -132,6 +133,7 @@ extern "C"
   static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Starting position for trajectory
   static tiny_VectorNu u_lqr;
   static tiny_VectorNx current_state;
+  static float init_vel_z;
 
   // Helper variables
   static bool enable_traj = false;
@@ -196,7 +198,7 @@ extern "C"
     // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
     // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
     // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-    Xref_origin << 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+    Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
     params.Xref = Xref_origin.replicate<1, NHORIZON>();
     mpc_setpoint = Xref_origin;
     controllerPidInit();
@@ -277,7 +279,6 @@ extern "C"
 
     /* Begin task initialization */
     runTaskSemaphore = xSemaphoreCreateBinary();
-    ASSERT(runTaskSemaphore);
 
     dataMutex = xSemaphoreCreateMutexStatic(&dataMutexBuffer);
 
@@ -442,9 +443,30 @@ extern "C"
         // mpc_setpoint_task(3) = (float)(problem.iter);
         // mpc_setpoint_task(4) = params.Xref.col(NHORIZON-1)(2);
 
+        eventTrigger_horizon_part1_payload.h0 = problem.x.col(0)(2);
+        eventTrigger_horizon_part1_payload.h1 = problem.x.col(1)(2);
+        eventTrigger_horizon_part1_payload.h2 = problem.x.col(2)(2);
+        eventTrigger_horizon_part1_payload.h3 = problem.x.col(3)(2);
+        eventTrigger_horizon_part1_payload.h4 = problem.x.col(4)(2);
+        eventTrigger_horizon_part2_payload.h5 = problem.x.col(5)(2);
+        eventTrigger_horizon_part2_payload.h6 = problem.x.col(6)(2);
+        eventTrigger_horizon_part2_payload.h7 = problem.x.col(7)(2);
+        eventTrigger_horizon_part2_payload.h8 = problem.x.col(8)(2);
+        eventTrigger_horizon_part2_payload.h9 = problem.x.col(9)(2);
+        eventTrigger_horizon_part3_payload.h10 = problem.x.col(10)(2);
+        eventTrigger_horizon_part3_payload.h11 = problem.x.col(11)(2);
+        eventTrigger_horizon_part3_payload.h12 = problem.x.col(12)(2);
+        eventTrigger_horizon_part3_payload.h13 = problem.x.col(13)(2);
+        eventTrigger_horizon_part3_payload.h14 = problem.x.col(14)(2);
+
+        eventTrigger(&eventTrigger_horizon_part1);
+        eventTrigger(&eventTrigger_horizon_part2);
+        eventTrigger(&eventTrigger_horizon_part3);
+
         // Copy the setpoint calculated by the task loop to the global mpc_setpoint
         xSemaphoreTake(dataMutex, portMAX_DELAY);
         memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
+        memcpy(&init_vel_z, &problem.x.col(0)(8), sizeof(float));
         xSemaphoreGive(dataMutex);
       }
     }
@@ -534,22 +556,27 @@ extern "C"
    * MPC controller
    */
 
-  // LOG_GROUP_START(ctrlMPC)
+LOG_GROUP_START(tinympc)
 
-  // LOG_ADD(LOG_INT8, result, &result)
-  // LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
+LOG_ADD(LOG_FLOAT, initial_velocity, &init_vel_z)
 
-  // LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-  // LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
-  // LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
-  // LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
+// // LOG_ADD(LOG_FLOAT, horizon_nh_z, problem_x.col(NHORIZON-1))
+// LOG_ADD(LOG_FLOAT, horizon_nh_z, &horizon_nh_z)
 
-  // LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
-  // LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
-  // LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
-  // LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
+// // LOG_ADD(LOG_INT8, result, &result)
+// // LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
-  // LOG_GROUP_STOP(ctrlMPC)
+// // LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
+// // LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
+// // LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
+// // LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
+
+// // LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
+// // LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
+// // LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
+// // LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
+
+LOG_GROUP_STOP(tinympc)
 
 #ifdef __cplusplus
 } /* extern "C" */
