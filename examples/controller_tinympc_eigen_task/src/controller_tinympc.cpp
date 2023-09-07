@@ -87,7 +87,8 @@ extern "C"
 #include "debug.h"
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
-#define MPC_RATE RATE_50_HZ
+// #define MPC_RATE RATE_50_HZ
+#define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -106,6 +107,9 @@ STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 EVENTTRIGGER(horizon_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
 EVENTTRIGGER(horizon_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
 EVENTTRIGGER(horizon_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
+EVENTTRIGGER(xref_event, float, xref_z);
+EVENTTRIGGER(iters_event, int32, iters);
+EVENTTRIGGER(cache_level_event, int32, level);
 
 // Structs to keep track of data sent to and received by stabilizer loop
 // Stabilizer loop updates/uses these
@@ -123,7 +127,8 @@ control_t control_task;
 tiny_VectorNx mpc_setpoint_task;
 
 /* Allocate global variables for MPC */
-static tinytype u_hover[4] = {.65, .65, .65, .65};
+// static tinytype u_hover[4] = {.65, .65, .65, .65};
+static tinytype u_hover[4] = {.583, .583, .583, .583};
 static struct tiny_cache cache;
 static struct tiny_params params;
 static struct tiny_problem problem;
@@ -140,14 +145,18 @@ static tiny_VectorNx current_state;
 static bool enable_traj = false;
 static int traj_index = 0;
 static int max_traj_index = 0;
+static int mpc_steps_taken = 0;
 static uint64_t startTimestamp;
 static uint32_t timestamp;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
+static float obs_velocity_scale = 10;
 
 // Obstacle constraint variables
 static Eigen::Matrix<tinytype, 3, 1> obs_center;
-static float r_obs = .25;
+static Eigen::Matrix<tinytype, 3, 1> obs_predicted_center;
+static Eigen::Matrix<tinytype, 3, 1> obs_velocity;
+static float r_obs = .5;
 
 static Eigen::Matrix<tinytype, 3, 1> xc;
 static Eigen::Matrix<tinytype, 3, 1> a_norm;
@@ -192,6 +201,24 @@ void appMain()
     vTaskDelay(M2T(2000));
   }
 }
+
+static void resetProblem(void) {
+  // Copy problem data
+  problem.x = tiny_MatrixNxNh::Zero();
+  problem.q = tiny_MatrixNxNh::Zero();
+  problem.p = tiny_MatrixNxNh::Zero();
+  problem.v = tiny_MatrixNxNh::Zero();
+  problem.vnew = tiny_MatrixNxNh::Zero();
+  problem.g = tiny_MatrixNxNh::Zero();
+
+  problem.u = tiny_MatrixNuNhm1::Zero();
+  problem.r = tiny_MatrixNuNhm1::Zero();
+  problem.d = tiny_MatrixNuNhm1::Zero();
+  problem.z = tiny_MatrixNuNhm1::Zero();
+  problem.znew = tiny_MatrixNuNhm1::Zero();
+  problem.y = tiny_MatrixNuNhm1::Zero();
+}
+
 
 void controllerOutOfTreeInit(void)
 {
@@ -241,20 +268,8 @@ void controllerOutOfTreeInit(void)
   params.Uref = tiny_MatrixNuNhm1::Zero();
   params.cache = cache;
 
-  // Copy problem data
-  problem.x = tiny_MatrixNxNh::Zero();
-  problem.q = tiny_MatrixNxNh::Zero();
-  problem.p = tiny_MatrixNxNh::Zero();
-  problem.v = tiny_MatrixNxNh::Zero();
-  problem.vnew = tiny_MatrixNxNh::Zero();
-  problem.g = tiny_MatrixNxNh::Zero();
-
-  problem.u = tiny_MatrixNuNhm1::Zero();
-  problem.r = tiny_MatrixNuNhm1::Zero();
-  problem.d = tiny_MatrixNuNhm1::Zero();
-  problem.z = tiny_MatrixNuNhm1::Zero();
-  problem.znew = tiny_MatrixNuNhm1::Zero();
-  problem.y = tiny_MatrixNuNhm1::Zero();
+  // Initialize problem data to zero
+  resetProblem();
 
   problem.primal_residual_state = 0;
   problem.primal_residual_input = 0;
@@ -291,7 +306,7 @@ void controllerOutOfTreeInit(void)
   /* End of task initialization */
 }
 
-void UpdateHorizonReference(const setpoint_t *setpoint)
+static void UpdateHorizonReference(const setpoint_t *setpoint)
 {
   if (enable_traj)
   {
@@ -353,6 +368,31 @@ static void tinympcControllerTask(void *parameters)
     {
       nextMpcMs = nowMs + (1000.0f / MPC_RATE);
 
+      // if (mpc_steps_taken % 50 == 0) {
+      //   // resetProblem();
+      //   // problem.x = tiny_MatrixNxNh::Zero();
+      //   // problem.q = tiny_MatrixNxNh::Zero();
+      //   // problem.p = tiny_MatrixNxNh::Zero(); // helps a little
+      //   // problem.v = tiny_MatrixNxNh::Zero();
+      //   // problem.vnew = tiny_MatrixNxNh::Zero();
+      //   problem.g = tiny_MatrixNxNh::Zero();
+
+      //   // problem.u = tiny_MatrixNuNhm1::Zero();
+      //   // problem.r = tiny_MatrixNuNhm1::Zero();
+      //   // problem.d = tiny_MatrixNuNhm1::Zero(); // helps a little
+      //   // problem.z = tiny_MatrixNuNhm1::Zero();
+      //   // problem.znew = tiny_MatrixNuNhm1::Zero();
+      //   problem.y = tiny_MatrixNuNhm1::Zero();
+      // }
+      // mpc_steps_taken++;
+
+      if (problem.cache_level == 0) {
+        problem.g = tiny_MatrixNxNh::Zero();
+        problem.y = tiny_MatrixNuNhm1::Zero();
+      }
+      // problem.g = tiny_MatrixNxNh::Zero();
+      // problem.y = tiny_MatrixNuNhm1::Zero();
+
       // Comment out when avoiding dynamic obstacle
       // Uncomment if following reference trajectory
       // if (usecTimestamp() - startTimestamp > 1000000 * 5 && traj_index == 0)
@@ -403,10 +443,17 @@ static void tinympcControllerTask(void *parameters)
       obs_center(0) = setpoint_task.position.x;
       obs_center(1) = setpoint_task.position.y;
       obs_center(2) = setpoint_task.position.z;
+      
+      obs_velocity(0) = setpoint_task.velocity.x;
+      obs_velocity(1) = setpoint_task.velocity.y;
+      obs_velocity(2) = setpoint_task.velocity.z;
+
+
 
       // When avoiding dynamic obstacle
       for (int i = 0; i < NHORIZON; i++)
       {
+        obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale;
         xc = obs_center - problem.x.col(i).head(3);
         a_norm = xc / xc.norm();
         params.A_constraints[i].head(3) = a_norm.transpose();
@@ -415,15 +462,16 @@ static void tinympcControllerTask(void *parameters)
       }
 
       // MPC solve
+      problem.iter = 0;
       solve_admm(&problem, &params);
       vTaskDelay(M2T(1));
       solve_admm(&problem, &params);
-      vTaskDelay(M2T(1));
-      solve_admm(&problem, &params);
-      vTaskDelay(M2T(1));
-      solve_admm(&problem, &params);
-      vTaskDelay(M2T(1));
-      solve_admm(&problem, &params);
+      // vTaskDelay(M2T(1));
+      // solve_admm(&problem, &params);
+      // vTaskDelay(M2T(1));
+      // solve_admm(&problem, &params);
+      // vTaskDelay(M2T(1));
+      // solve_admm(&problem, &params);
       // DEBUG_PRINT("iters: %d\n", problem.iter);
 
       // if (enable_traj) {
@@ -432,11 +480,12 @@ static void tinympcControllerTask(void *parameters)
       // }
 
       // mpc_setpoint_task = problem.x.col(2);
-      mpc_setpoint_task = problem.x.col(10);
-      // mpc_setpoint_task = problem.x.col(NHORIZON-1);
+      // mpc_setpoint_task = problem.x.col(10);
+      mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
       // mpc_setpoint_task(3) = problem.x.col(0)(2);
-      mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+      // mpc_setpoint_task(4) = problem.x.col(NHORIZON-1)(2);
+      mpc_setpoint_task(4) = (float)problem.cache_level;
 
       // mpc_setpoint_task(3) = problem.x.col(0)(2);
       // mpc_setpoint_task(4) = problem.x.col(3)(2);
@@ -460,9 +509,18 @@ static void tinympcControllerTask(void *parameters)
       eventTrigger_horizon_part3_payload.h13 = problem.x.col(13)(2);
       eventTrigger_horizon_part3_payload.h14 = problem.x.col(14)(2);
 
+      eventTrigger_xref_event_payload.xref_z = params.Xref.col(NHORIZON-1)(2);
+
+      eventTrigger_iters_event_payload.iters = problem.iter;
+      
+      eventTrigger_cache_level_event_payload.level = problem.cache_level;
+
       eventTrigger(&eventTrigger_horizon_part1);
       eventTrigger(&eventTrigger_horizon_part2);
       eventTrigger(&eventTrigger_horizon_part3);
+      eventTrigger(&eventTrigger_xref_event);
+      eventTrigger(&eventTrigger_iters_event);
+      eventTrigger(&eventTrigger_cache_level_event);
 
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
       xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -502,11 +560,14 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     // mpc_setpoint_pid.position.z = 1;
     // mpc_setpoint_pid.attitude.yaw = 0;
 
-    if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
-      // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
-      DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
-      // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
-    }
+    // if (RATE_DO_EXECUTE(RATE_25_HZ, tick)) {
+    //   // DEBUG_PRINT("z: %.4f\n", mpc_setpoint(2));
+    //   // DEBUG_PRINT("h: %.4f\n", mpc_setpoint(4));
+    //   // DEBUG_PRINT("x: %.4f\n", setpoint->position.x);
+    //   if (mpc_setpoint(4) == 1) {
+    //     DEBUG_PRINT("cache level == 1\n");
+    //   }
+    // }
 
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
     // controllerPid(control, setpoint, sensors, state, tick);
