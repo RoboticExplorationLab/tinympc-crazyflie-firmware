@@ -76,11 +76,11 @@ extern "C"
 
 // Trajectory
 // #include "quadrotor_100hz_ref_hover.hpp"
-// #include "quadrotor_50hz_ref_circle.hpp"
+#include "quadrotor_50hz_ref_circle.hpp"
 // #include "quadrotor_50hz_ref_circle_2_5s.hpp"
 // #include "quadrotor_50hz_line_5s.hpp"
 // #include "quadrotor_50hz_line_8s.hpp"
-#include "quadrotor_50hz_line_9s_xyz.hpp"
+// #include "quadrotor_50hz_line_9s_xyz.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPCTASK"
@@ -116,7 +116,7 @@ EVENTTRIGGER(horizon_z_part1, float, h0, float, h1, float, h2, float, h3, float,
 EVENTTRIGGER(horizon_z_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
 EVENTTRIGGER(horizon_z_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
 EVENTTRIGGER(horizon_z_part4, float, h15, float, h16, float, h17, float, h18, float, h19);
-EVENTTRIGGER(problem_data_event, int32, iters, int32, cache_level);
+EVENTTRIGGER(problem_data_event, int32, solvetime_us, int32, iters, int32, cache_level);
 EVENTTRIGGER(problem_residuals_event, float, prim_resid_state, float, prim_resid_input, float, dual_resid_state, float, dual_resid_input);
 
 
@@ -143,8 +143,8 @@ static struct tiny_params params;
 static struct tiny_problem problem;
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
-// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
-static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Start position for trajectory
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_end; // End position for trajectory
 static tiny_VectorNu u_lqr;
@@ -156,7 +156,8 @@ static int traj_index = 0;
 static int max_traj_index = 0;
 static int mpc_steps_taken = 0;
 static uint64_t startTimestamp;
-static uint32_t timestamp;
+static uint32_t mpc_start_timestamp;
+static uint32_t mpc_time_us;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
 static float obs_velocity_scale = 1;
@@ -289,13 +290,13 @@ void controllerOutOfTreeInit(void)
   problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
   // // Copy reference trajectory into Eigen matrix
-  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
+  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, NSTATES, Eigen::RowMajor>>(Xref_data).transpose();
   // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  // Xref_end << Xref_total.col(NTOTAL-1).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_end << Xref_total.col(NTOTAL-1).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_end << Xref_total.col(NTOTAL-1).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+  // Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1, NHORIZON>();
 
   enable_traj = false;
@@ -320,8 +321,8 @@ static void UpdateHorizonReference(const setpoint_t *setpoint)
   {
     if (traj_index < max_traj_index)
     {
-      // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
-      params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
+      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      // params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
       traj_index++;
     }
     else if (traj_index >= max_traj_index) {
@@ -375,8 +376,8 @@ static void tinympcControllerTask(void *parameters)
       if (usecTimestamp() - startTimestamp > 1000000 * 2 && traj_index == 0)
       {
         DEBUG_PRINT("Enable trajectory!\n");
-        // enable_traj = true; 
-        traj_index++;
+        enable_traj = true; 
+        // traj_index++;
       }
 
       if (problem.cache_level == 0) {
@@ -403,16 +404,24 @@ static void tinympcControllerTask(void *parameters)
       obs_center(0) = setpoint_task.position.x;
       obs_center(1) = setpoint_task.position.y;
       obs_center(2) = setpoint_task.position.z;
-      
+
       obs_velocity(0) = setpoint_task.velocity.x;
       obs_velocity(1) = setpoint_task.velocity.y;
       obs_velocity(2) = setpoint_task.velocity.z;
 
+      // if (obs_velocity.norm() < .001) {
+      //   obs_offset << 0, 0, 0;
+      // }
+      // else {
+      //   obs_offset = (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized();
+      // }
+      
       // // When avoiding obstacle while tracking trajectory
       // if (enable_traj) {
+
       //   // Update constraint parameters
       //   for (int i=0; i<NHORIZON; i++) {
-      //     obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale;
+      //     obs_predicted_center = obs_center +  obs_offset + (obs_velocity/50 * i);
       //     xc = obs_predicted_center - problem.x.col(i).head(3);
       //     a_norm = xc / xc.norm();
       //     params.A_constraints[i].head(3) = a_norm.transpose();
@@ -427,43 +436,11 @@ static void tinympcControllerTask(void *parameters)
       //   }
       // }
 
-      if (obs_velocity.norm() < .001) {
-        obs_offset << 0, 0, 0;
-      }
-      else {
-        obs_offset = (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized();
-      }
-
-      // When avoiding dynamic obstacle
-      for (int i = 0; i < NHORIZON; i++)
-      {
-        // obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale + (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized() * use_obs_offset;
-        // obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale + (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized();
-        obs_predicted_center = obs_center +  obs_offset + (obs_velocity/50 * i);
-        xc = obs_predicted_center - problem.x.col(i).head(3);
-        a_norm = xc / xc.norm();
-        params.A_constraints[i].head(3) = a_norm.transpose();
-        q_c = obs_center - r_obs * a_norm;
-        params.x_max[i](0) = a_norm.transpose() * q_c;
-      }
-
-
-      // // Start predicting the obstacle if the distance between it and the drone is less
-      // // than the distance the obstacle would travel over the course of two seconds,
-      // // since the drone should be able to move out of the way in less than two seconds.
-      // if ((problem.x.col(0).head(3) - obs_center).norm() < obs_velocity.norm()*2) {
-      //   obs_offset = (problem.x.col(0).head(3) - obs_center).norm()*.9 * obs_velocity.normalized();
-      // }
-      // else {
-      //   obs_offset << 0.0, 0.0, 0.0;
-      // }
 
       // // When avoiding dynamic obstacle
       // for (int i = 0; i < NHORIZON; i++)
       // {
-      //   // obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale + (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized() * use_obs_offset;
-      //   // obs_predicted_center = obs_center + (obs_velocity/50 * i) * obs_velocity_scale + (problem.x.col(0).head(3) - obs_center).norm() * obs_velocity.normalized();
-      //   obs_predicted_center = obs_center + obs_offset + (obs_velocity/50 * i) * obs_velocity_scale;
+      //   obs_predicted_center = obs_center +  obs_offset + (obs_velocity/50 * i);
       //   xc = obs_predicted_center - problem.x.col(i).head(3);
       //   a_norm = xc / xc.norm();
       //   params.A_constraints[i].head(3) = a_norm.transpose();
@@ -473,75 +450,78 @@ static void tinympcControllerTask(void *parameters)
 
       // MPC solve
       problem.iter = 0;
+      mpc_start_timestamp = usecTimestamp();
       solve_admm(&problem, &params);
       vTaskDelay(M2T(1));
       solve_admm(&problem, &params);
-      
+      mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000; // -1000 for each vTaskDelay(M2T(1))
+
       mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
-      eventTrigger_horizon_x_part1_payload.h0 = problem.x.col(0)(2);
-      eventTrigger_horizon_x_part1_payload.h1 = problem.x.col(1)(2);
-      eventTrigger_horizon_x_part1_payload.h2 = problem.x.col(2)(2);
-      eventTrigger_horizon_x_part1_payload.h3 = problem.x.col(3)(2);
-      eventTrigger_horizon_x_part1_payload.h4 = problem.x.col(4)(2);
-      eventTrigger_horizon_x_part2_payload.h5 = problem.x.col(5)(2);
-      eventTrigger_horizon_x_part2_payload.h6 = problem.x.col(6)(2);
-      eventTrigger_horizon_x_part2_payload.h7 = problem.x.col(7)(2);
-      eventTrigger_horizon_x_part2_payload.h8 = problem.x.col(8)(2);
-      eventTrigger_horizon_x_part2_payload.h9 = problem.x.col(9)(2);
-      eventTrigger_horizon_x_part3_payload.h10 = problem.x.col(10)(2);
-      eventTrigger_horizon_x_part3_payload.h11 = problem.x.col(11)(2);
-      eventTrigger_horizon_x_part3_payload.h12 = problem.x.col(12)(2);
-      eventTrigger_horizon_x_part3_payload.h13 = problem.x.col(13)(2);
-      eventTrigger_horizon_x_part3_payload.h14 = problem.x.col(14)(2);
-      eventTrigger_horizon_x_part4_payload.h15 = problem.x.col(15)(2);
-      eventTrigger_horizon_x_part4_payload.h16 = problem.x.col(16)(2);
-      eventTrigger_horizon_x_part4_payload.h17 = problem.x.col(17)(2);
-      eventTrigger_horizon_x_part4_payload.h18 = problem.x.col(18)(2);
-      eventTrigger_horizon_x_part4_payload.h19 = problem.x.col(19)(2);
+      eventTrigger_horizon_x_part1_payload.h0 = problem.x.col(0)(0);
+      eventTrigger_horizon_x_part1_payload.h1 = problem.x.col(1)(0);
+      eventTrigger_horizon_x_part1_payload.h2 = problem.x.col(2)(0);
+      eventTrigger_horizon_x_part1_payload.h3 = problem.x.col(3)(0);
+      eventTrigger_horizon_x_part1_payload.h4 = problem.x.col(4)(0);
+      eventTrigger_horizon_x_part2_payload.h5 = problem.x.col(5)(0);
+      eventTrigger_horizon_x_part2_payload.h6 = problem.x.col(6)(0);
+      eventTrigger_horizon_x_part2_payload.h7 = problem.x.col(7)(0);
+      eventTrigger_horizon_x_part2_payload.h8 = problem.x.col(8)(0);
+      eventTrigger_horizon_x_part2_payload.h9 = problem.x.col(9)(0);
+      eventTrigger_horizon_x_part3_payload.h10 = problem.x.col(10)(0);
+      eventTrigger_horizon_x_part3_payload.h11 = problem.x.col(11)(0);
+      eventTrigger_horizon_x_part3_payload.h12 = problem.x.col(12)(0);
+      eventTrigger_horizon_x_part3_payload.h13 = problem.x.col(13)(0);
+      eventTrigger_horizon_x_part3_payload.h14 = problem.x.col(14)(0);
+      eventTrigger_horizon_x_part4_payload.h15 = problem.x.col(15)(0);
+      eventTrigger_horizon_x_part4_payload.h16 = problem.x.col(16)(0);
+      eventTrigger_horizon_x_part4_payload.h17 = problem.x.col(17)(0);
+      eventTrigger_horizon_x_part4_payload.h18 = problem.x.col(18)(0);
+      eventTrigger_horizon_x_part4_payload.h19 = problem.x.col(19)(0);
 
-      eventTrigger_horizon_y_part1_payload.h0 = problem.y.col(0)(2);
-      eventTrigger_horizon_y_part1_payload.h1 = problem.y.col(1)(2);
-      eventTrigger_horizon_y_part1_payload.h2 = problem.y.col(2)(2);
-      eventTrigger_horizon_y_part1_payload.h3 = problem.y.col(3)(2);
-      eventTrigger_horizon_y_part1_payload.h4 = problem.y.col(4)(2);
-      eventTrigger_horizon_y_part2_payload.h5 = problem.y.col(5)(2);
-      eventTrigger_horizon_y_part2_payload.h6 = problem.y.col(6)(2);
-      eventTrigger_horizon_y_part2_payload.h7 = problem.y.col(7)(2);
-      eventTrigger_horizon_y_part2_payload.h8 = problem.y.col(8)(2);
-      eventTrigger_horizon_y_part2_payload.h9 = problem.y.col(9)(2);
-      eventTrigger_horizon_y_part3_payload.h10 = problem.y.col(10)(2);
-      eventTrigger_horizon_y_part3_payload.h11 = problem.y.col(11)(2);
-      eventTrigger_horizon_y_part3_payload.h12 = problem.y.col(12)(2);
-      eventTrigger_horizon_y_part3_payload.h13 = problem.y.col(13)(2);
-      eventTrigger_horizon_y_part3_payload.h14 = problem.y.col(14)(2);
-      eventTrigger_horizon_y_part4_payload.h15 = problem.y.col(15)(2);
-      eventTrigger_horizon_y_part4_payload.h16 = problem.y.col(16)(2);
-      eventTrigger_horizon_y_part4_payload.h17 = problem.y.col(17)(2);
-      eventTrigger_horizon_y_part4_payload.h18 = problem.y.col(18)(2);
-      eventTrigger_horizon_y_part4_payload.h19 = problem.y.col(19)(2);
+      eventTrigger_horizon_y_part1_payload.h0 = problem.x.col(0)(1);
+      eventTrigger_horizon_y_part1_payload.h1 = problem.x.col(1)(1);
+      eventTrigger_horizon_y_part1_payload.h2 = problem.x.col(2)(1);
+      eventTrigger_horizon_y_part1_payload.h3 = problem.x.col(3)(1);
+      eventTrigger_horizon_y_part1_payload.h4 = problem.x.col(4)(1);
+      eventTrigger_horizon_y_part2_payload.h5 = problem.x.col(5)(1);
+      eventTrigger_horizon_y_part2_payload.h6 = problem.x.col(6)(1);
+      eventTrigger_horizon_y_part2_payload.h7 = problem.x.col(7)(1);
+      eventTrigger_horizon_y_part2_payload.h8 = problem.x.col(8)(1);
+      eventTrigger_horizon_y_part2_payload.h9 = problem.x.col(9)(1);
+      eventTrigger_horizon_y_part3_payload.h10 = problem.x.col(10)(1);
+      eventTrigger_horizon_y_part3_payload.h11 = problem.x.col(11)(1);
+      eventTrigger_horizon_y_part3_payload.h12 = problem.x.col(12)(1);
+      eventTrigger_horizon_y_part3_payload.h13 = problem.x.col(13)(1);
+      eventTrigger_horizon_y_part3_payload.h14 = problem.x.col(14)(1);
+      eventTrigger_horizon_y_part4_payload.h15 = problem.x.col(15)(1);
+      eventTrigger_horizon_y_part4_payload.h16 = problem.x.col(16)(1);
+      eventTrigger_horizon_y_part4_payload.h17 = problem.x.col(17)(1);
+      eventTrigger_horizon_y_part4_payload.h18 = problem.x.col(18)(1);
+      eventTrigger_horizon_y_part4_payload.h19 = problem.x.col(19)(1);
 
-      eventTrigger_horizon_z_part1_payload.h0 = problem.z.col(0)(2);
-      eventTrigger_horizon_z_part1_payload.h1 = problem.z.col(1)(2);
-      eventTrigger_horizon_z_part1_payload.h2 = problem.z.col(2)(2);
-      eventTrigger_horizon_z_part1_payload.h3 = problem.z.col(3)(2);
-      eventTrigger_horizon_z_part1_payload.h4 = problem.z.col(4)(2);
-      eventTrigger_horizon_z_part2_payload.h5 = problem.z.col(5)(2);
-      eventTrigger_horizon_z_part2_payload.h6 = problem.z.col(6)(2);
-      eventTrigger_horizon_z_part2_payload.h7 = problem.z.col(7)(2);
-      eventTrigger_horizon_z_part2_payload.h8 = problem.z.col(8)(2);
-      eventTrigger_horizon_z_part2_payload.h9 = problem.z.col(9)(2);
-      eventTrigger_horizon_z_part3_payload.h10 = problem.z.col(10)(2);
-      eventTrigger_horizon_z_part3_payload.h11 = problem.z.col(11)(2);
-      eventTrigger_horizon_z_part3_payload.h12 = problem.z.col(12)(2);
-      eventTrigger_horizon_z_part3_payload.h13 = problem.z.col(13)(2);
-      eventTrigger_horizon_z_part3_payload.h14 = problem.z.col(14)(2);
-      eventTrigger_horizon_z_part4_payload.h15 = problem.z.col(15)(2);
-      eventTrigger_horizon_z_part4_payload.h16 = problem.z.col(16)(2);
-      eventTrigger_horizon_z_part4_payload.h17 = problem.z.col(17)(2);
-      eventTrigger_horizon_z_part4_payload.h18 = problem.z.col(18)(2);
-      eventTrigger_horizon_z_part4_payload.h19 = problem.z.col(19)(2);
+      eventTrigger_horizon_z_part1_payload.h0 = problem.x.col(0)(2);
+      eventTrigger_horizon_z_part1_payload.h1 = problem.x.col(1)(2);
+      eventTrigger_horizon_z_part1_payload.h2 = problem.x.col(2)(2);
+      eventTrigger_horizon_z_part1_payload.h3 = problem.x.col(3)(2);
+      eventTrigger_horizon_z_part1_payload.h4 = problem.x.col(4)(2);
+      eventTrigger_horizon_z_part2_payload.h5 = problem.x.col(5)(2);
+      eventTrigger_horizon_z_part2_payload.h6 = problem.x.col(6)(2);
+      eventTrigger_horizon_z_part2_payload.h7 = problem.x.col(7)(2);
+      eventTrigger_horizon_z_part2_payload.h8 = problem.x.col(8)(2);
+      eventTrigger_horizon_z_part2_payload.h9 = problem.x.col(9)(2);
+      eventTrigger_horizon_z_part3_payload.h10 = problem.x.col(10)(2);
+      eventTrigger_horizon_z_part3_payload.h11 = problem.x.col(11)(2);
+      eventTrigger_horizon_z_part3_payload.h12 = problem.x.col(12)(2);
+      eventTrigger_horizon_z_part3_payload.h13 = problem.x.col(13)(2);
+      eventTrigger_horizon_z_part3_payload.h14 = problem.x.col(14)(2);
+      eventTrigger_horizon_z_part4_payload.h15 = problem.x.col(15)(2);
+      eventTrigger_horizon_z_part4_payload.h16 = problem.x.col(16)(2);
+      eventTrigger_horizon_z_part4_payload.h17 = problem.x.col(17)(2);
+      eventTrigger_horizon_z_part4_payload.h18 = problem.x.col(18)(2);
+      eventTrigger_horizon_z_part4_payload.h19 = problem.x.col(19)(2);
 
+      eventTrigger_problem_data_event_payload.solvetime_us = mpc_time_us;
       eventTrigger_problem_data_event_payload.iters = problem.iter;
       eventTrigger_problem_data_event_payload.cache_level = problem.cache_level;
       eventTrigger_problem_residuals_event_payload.prim_resid_state = problem.primal_residual_state;
