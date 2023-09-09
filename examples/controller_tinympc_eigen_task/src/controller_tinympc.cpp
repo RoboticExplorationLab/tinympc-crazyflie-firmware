@@ -412,10 +412,6 @@ static void tinympcControllerTask(void *parameters)
       // obs_velocity(1) = setpoint_task.velocity.y;
       // obs_velocity(2) = setpoint_task.velocity.z;
 
-      // Just for obstacle field test
-      obs_2_center(0) = setpoint_task.velocity.x;
-      obs_2_center(1) = setpoint_task.velocity.y;
-      obs_2_center(2) = setpoint_task.velocity.z;
       
       // When avoiding obstacle while tracking trajectory
       if (enable_traj) {
@@ -429,17 +425,6 @@ static void tinympcControllerTask(void *parameters)
           q_c = obs_center - r_obs * a_norm;
           params.x_max[i](0) = a_norm.transpose() * q_c;
         }
-
-        // Update constraint parameters for sphere 2
-        for (int i=0; i<NHORIZON; i++) {
-          xc = obs_2_center - problem.x.col(i).head(3);
-          a_norm = xc / xc.norm();
-          params.A_constraints[i].block<1,3>(1,0) = a_norm.transpose();
-
-          q_c = obs_2_center - r_obs * a_norm;
-          params.x_max[i](1) = a_norm.transpose() * q_c;
-        }
-
       } else {
         for (int i=0; i<NHORIZON; i++) {
             params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
