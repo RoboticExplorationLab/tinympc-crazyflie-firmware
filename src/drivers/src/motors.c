@@ -717,6 +717,7 @@ LOG_GROUP_START(motor)
 /**
  * @brief Motor power (PWM value) for M1 [0 - UINT16_MAX]
  */
+LOG_ADD_CORE(LOG_UINT32, m5, &motor_ratios[MOTOR_M1])
 LOG_ADD_CORE(LOG_UINT32, m1, &motor_ratios[MOTOR_M1])
 /**
  * @brief Motor power (PWM value) for M2 [0 - UINT16_MAX]

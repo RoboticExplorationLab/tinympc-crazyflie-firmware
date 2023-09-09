@@ -128,14 +128,14 @@ static tiny_AdmmWorkspace work;
 static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover[4] = {0.7f, 0.663f, 0.7373f, 0.633f};  // cf1
-// static float u_hover[4] = {0.7467, 0.667f, 0.78, 0.7f};  // cf2 not correct
+static float u_hover[4] = {0.763f, 0.713f, 0.7789f, 0.6768f};  // cf1
+// static float u_hover[4] = {0.7f, 0.7f, 0.7f, 0.7f};  // cf2 not correct
 static int8_t result = 0;
 static uint32_t step = 0;
 static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data);
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 3;       // hold current trajectory for this no of steps
+static int8_t traj_hold = 2;       // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 
@@ -260,7 +260,7 @@ void controllerOutOfTreeInit(void) {
   stgs.en_cstr_goal = 0;
   stgs.en_cstr_inputs = 1;
   stgs.en_cstr_states = 0;
-  stgs.max_iter = 6;           // limit this if needed
+  stgs.max_iter = 8;           // limit this if needed
   stgs.verbose = 0;
   stgs.check_termination = 2;
   stgs.tol_abs_dual = 1e-2;

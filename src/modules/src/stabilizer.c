@@ -65,6 +65,7 @@ static uint32_t inToOutLatency;
 
 // State variables for the stabilizer
 static setpoint_t setpoint;
+static setpoint_t setpoint_traj;
 static sensorData_t sensorData;
 static state_t state;
 static control_t control;
@@ -118,6 +119,60 @@ static struct {
   int16_t ay;
   int16_t az;
 } setpointCompressed;
+
+// FIXME 
+// START OF MY TRAJECTORY
+#include "traj_fig8_12.h"
+static uint32_t step = 0;
+static uint8_t en_traj = 0;
+static uint32_t traj_length = 1405;
+static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
+static int8_t traj_hold = 3;       // hold current trajectory for this no of steps
+static int8_t traj_iter = 0;
+static uint32_t traj_idx = 0;
+
+void updateHorizonReference(const setpoint_t *setpoint) {
+  // Update reference: from stored trajectory or commander
+  DEBUG_PRINT("%d %d\n", en_traj, step);
+  if (en_traj == 1) {
+    if (step % traj_hold == 0) {
+      traj_idx = (int)(step / traj_hold);
+      {
+        setpoint_traj.position.x = X_ref_data[traj_idx][0];
+        setpoint_traj.position.y = X_ref_data[traj_idx][1];
+        setpoint_traj.position.z = X_ref_data[traj_idx][2];
+        // setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
+        // setpoint_traj.velocity.y = X_ref_data[traj_idx][7];
+        // setpoint_traj.velocity.z = X_ref_data[traj_idx][8];
+        // setpoint_traj.attitude.roll = degrees(X_ref_data[traj_idx][];)
+        setpoint_traj.mode.x = modeAbs;
+        setpoint_traj.mode.z == modeAbs;
+        setpoint_traj.mode.yaw == modeAbs;
+
+      }
+    }
+  }
+  else {
+    setpoint_traj = *setpoint;
+  }
+  // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
+
+  // stop trajectory executation
+  if (en_traj == 1) {
+    if (traj_iter >= user_traj_iter) {
+      en_traj = 0;
+      DEBUG_PRINT("stop\n");
+    }
+
+    if (traj_idx >= traj_length - 1 - 10 + 1) { 
+      // complete one trajectory
+      step = 0; 
+      traj_iter += 1;
+    } 
+    else step += 1;
+  }
+}
+// END OF MY TRAJECTORY
 
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
@@ -188,6 +243,9 @@ void stabilizerInit(StateEstimatorType estimator)
   STATIC_MEM_TASK_CREATE(stabilizerTask, stabilizerTask, STABILIZER_TASK_NAME, NULL, STABILIZER_TASK_PRI);
 
   isInit = true;
+
+  // FIXME
+  traj_length = traj_length * traj_hold;
 }
 
 bool stabilizerTest(void)
@@ -288,18 +346,21 @@ static void stabilizerTask(void* param)
       }
 
       stateEstimator(&state, tick);
-      compressState();
+      // compressState(); 
 
       if (crtpCommanderHighLevelGetSetpoint(&tempSetpoint, &state, tick)) {
         commanderSetSetpoint(&tempSetpoint, COMMANDER_PRIORITY_HIGHLEVEL);
       }
 
       commanderGetSetpoint(&setpoint, &state);
-      compressSetpoint();
+      // compressSetpoint();
+
+      // FIXME 
+      updateHorizonReference(&setpoint);  // call every 500hz just like mpc
 
       // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
-      controller(&control, &setpoint, &sensorData, &state, tick);
+      controller(&control, &setpoint_traj, &sensorData, &state, tick);
 
       checkEmergencyStopTimeout();
 
@@ -364,6 +425,7 @@ void stabilizerSetEmergencyStopTimeout(int timeout)
  * for the stabilizer module, or to do an emergency stop
  */
 PARAM_GROUP_START(stabilizer)
+PARAM_ADD_CORE(PARAM_UINT8, en_traj, &en_traj)
 /**
  * @brief Estimator type Auto select(0), complementary(1), extended kalman(2), **unscented kalman(3)  (Default: 0)
  *
