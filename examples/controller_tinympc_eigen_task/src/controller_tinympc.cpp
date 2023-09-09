@@ -143,8 +143,8 @@ static struct tiny_params params;
 static struct tiny_problem problem;
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
-// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
-static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Start position for trajectory
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_end; // End position for trajectory
 static tiny_VectorNu u_lqr;
@@ -441,18 +441,19 @@ static void tinympcControllerTask(void *parameters)
       // }
 
 
-      // When avoiding dynamic obstacle
-      for (int i = 0; i < NHORIZON; i++)
-      {
-        obs_predicted_center = obs_center +  obs_offset; // + (obs_velocity/50 * i);
-        xc = obs_predicted_center - problem.x.col(i).head(3);
-        a_norm = xc / xc.norm();
+      // // When avoiding dynamic obstacle
+      // for (int i = 0; i < NHORIZON; i++)
+      // {
+      //   // obs_predicted_center = obs_center +  obs_offset; // + (obs_velocity/50 * i);
+      //   obs_predicted_center = obs_center;
+      //   xc = obs_predicted_center - problem.x.col(i).head(3);
+      //   a_norm = xc / xc.norm();
 
-        params.A_constraints[i].block<1,3>(0,0) = a_norm.transpose();
+      //   params.A_constraints[i].block<1,3>(0,0) = a_norm.transpose();
 
-        q_c = obs_predicted_center - r_obs * a_norm;
-        params.x_max[i](0) = a_norm.transpose() * q_c;
-      }
+      //   q_c = obs_predicted_center - r_obs * a_norm;
+      //   params.x_max[i](0) = a_norm.transpose() * q_c;
+      // }
 
       // MPC solve
       problem.iter = 0;
