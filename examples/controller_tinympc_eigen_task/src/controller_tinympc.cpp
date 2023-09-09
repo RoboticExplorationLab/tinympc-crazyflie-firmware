@@ -76,11 +76,11 @@ extern "C"
 
 // Trajectory
 // #include "quadrotor_100hz_ref_hover.hpp"
-#include "quadrotor_50hz_ref_circle.hpp"
+// #include "quadrotor_50hz_ref_circle.hpp"
 // #include "quadrotor_50hz_ref_circle_2_5s.hpp"
 // #include "quadrotor_50hz_line_5s.hpp"
 // #include "quadrotor_50hz_line_8s.hpp"
-// #include "quadrotor_50hz_line_9s_xyz.hpp"
+#include "quadrotor_50hz_line_9s_xyz.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPCTASK"
@@ -143,8 +143,8 @@ static struct tiny_params params;
 static struct tiny_problem problem;
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
-static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
-// static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
+// static Eigen::Matrix<tinytype, NSTATES, NTOTAL, Eigen::ColMajor> Xref_total;
+static Eigen::Matrix<tinytype, 3, NTOTAL, Eigen::ColMajor> Xref_total;
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_origin; // Start position for trajectory
 static Eigen::Matrix<tinytype, NSTATES, 1, Eigen::ColMajor> Xref_end; // End position for trajectory
 static tiny_VectorNu u_lqr;
@@ -164,15 +164,12 @@ static float obs_velocity_scale = 1;
 static float use_obs_offset = 0;
 
 // Obstacle constraint variables
-static Eigen::Matrix<tinytype, 3, 1> obs_center;
-static Eigen::Matrix<tinytype, 3, 1> obs_predicted_center;
-static Eigen::Matrix<tinytype, 3, 1> obs_velocity;
-static Eigen::Matrix<tinytype, 3, 1> obs_offset;
+static Eigen::Matrix<tinytype, 2, 1> obs_center;
 static float r_obs = .5;
 
-static Eigen::Matrix<tinytype, 3, 1> xc;
-static Eigen::Matrix<tinytype, 3, 1> a_norm;
-static Eigen::Matrix<tinytype, 3, 1> q_c;
+static Eigen::Matrix<tinytype, 2, 1> xc;
+static Eigen::Matrix<tinytype, 2, 1> a_norm;
+static Eigen::Matrix<tinytype, 2, 1> q_c;
 
 static inline float quat_dot(quaternion_t a, quaternion_t b)
 {
@@ -294,11 +291,11 @@ void controllerOutOfTreeInit(void)
   // Xref_origin << Xref_total.col(0), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
   // Xref_end << Xref_total.col(NTOTAL-1), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
 
-  // Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
-  // Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
-  // Xref_end << Xref_total.col(NTOTAL-1).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_total = Eigen::Map<Matrix<tinytype, NTOTAL, 3, Eigen::RowMajor>>(Xref_data).transpose();
+  Xref_origin << Xref_total.col(0).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
+  Xref_end << Xref_total.col(NTOTAL-1).head(3), 0, 0, 0, 0, 0, 0, 0, 0, 0; // Go to xyz start of traj
 
-  Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
+  // Xref_origin << 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0, 0, 0; // Always go to 0, 0, 1 (comment out enable_traj = true check in main loop)
   params.Xref = Xref_origin.replicate<1, NHORIZON>();
 
   enable_traj = false;
@@ -323,8 +320,8 @@ static void UpdateHorizonReference(const setpoint_t *setpoint)
   {
     if (traj_index < max_traj_index)
     {
-      params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
-      // params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
+      // params.Xref = Xref_total.block<NSTATES, NHORIZON>(0, traj_index);
+      params.Xref.block<3, NHORIZON>(0,0) = Xref_total.block<3, NHORIZON>(0, traj_index);
       traj_index++;
     }
     else if (traj_index >= max_traj_index) {
@@ -378,8 +375,8 @@ static void tinympcControllerTask(void *parameters)
       if (usecTimestamp() - startTimestamp > 1000000 * 2 && traj_index == 0)
       {
         DEBUG_PRINT("Enable trajectory!\n");
-        // enable_traj = true; 
-        traj_index++;
+        enable_traj = true; 
+        // traj_index++;
       }
 
       if (problem.cache_level == 0) {
@@ -405,55 +402,25 @@ static void tinympcControllerTask(void *parameters)
       r_obs = setpoint_task.acceleration.x;
       obs_center(0) = setpoint_task.position.x;
       obs_center(1) = setpoint_task.position.y;
-      obs_center(2) = setpoint_task.position.z;
 
-      obs_velocity(0) = setpoint_task.velocity.x;
-      obs_velocity(1) = setpoint_task.velocity.y;
-      obs_velocity(2) = setpoint_task.velocity.z;
+      // When avoiding obstacle while tracking trajectory
+      if (enable_traj) {
+        // Update constraint parameters assuming object is a vertical cylinder
+        for (int i=0; i<NHORIZON; i++) {
+          xc = obs_center - problem.x.col(i).head(3);
+          a_norm = xc / xc.norm();
+          params.A_constraints[i].block<1,2>(0,0) = a_norm.transpose();
 
-      if (obs_velocity.norm() < .001) {
-        obs_offset << 0, 0, 0;
+          q_c = obs_center - r_obs * a_norm;
+          params.x_max[i](0) = a_norm.transpose() * q_c;
+        }
+      } else {
+        for (int i=0; i<NHORIZON; i++) {
+            params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
+            params.x_max[i] = tiny_VectorNc::Constant(1000);
+            params.A_constraints[i] = tiny_MatrixNcNx::Zero();
+        }
       }
-      else {
-        obs_offset = ( (problem.x.col(0).head(3) - obs_center).norm() - .2 ) * obs_velocity.normalized();
-      }
-      
-      // // When avoiding obstacle while tracking trajectory
-      // if (enable_traj) {
-
-      //   // Update constraint parameters
-      //   for (int i=0; i<NHORIZON; i++) {
-      //     obs_predicted_center = obs_center +  obs_offset + (obs_velocity/50 * i);
-      //     xc = obs_predicted_center - problem.x.col(i).head(3);
-      //     a_norm = xc / xc.norm();
-
-      //     params.A_constraints[i].block<1,3>(0,0) = a_norm.transpose();
-
-      //     q_c = obs_predicted_center - r_obs * a_norm;
-      //     params.x_max[i](0) = a_norm.transpose() * q_c;
-      //   }
-      // } else {
-      //   for (int i=0; i<NHORIZON; i++) {
-      //       params.x_min[i] = tiny_VectorNc::Constant(-1000); // Currently unused
-      //       params.x_max[i] = tiny_VectorNc::Constant(1000);
-      //       params.A_constraints[i] = tiny_MatrixNcNx::Zero();
-      //   }
-      // }
-
-
-      // // When avoiding dynamic obstacle
-      // for (int i = 0; i < NHORIZON; i++)
-      // {
-      //   // obs_predicted_center = obs_center +  obs_offset; // + (obs_velocity/50 * i);
-      //   obs_predicted_center = obs_center;
-      //   xc = obs_predicted_center - problem.x.col(i).head(3);
-      //   a_norm = xc / xc.norm();
-
-      //   params.A_constraints[i].block<1,3>(0,0) = a_norm.transpose();
-
-      //   q_c = obs_predicted_center - r_obs * a_norm;
-      //   params.x_max[i](0) = a_norm.transpose() * q_c;
-      // }
 
       // MPC solve
       problem.iter = 0;
