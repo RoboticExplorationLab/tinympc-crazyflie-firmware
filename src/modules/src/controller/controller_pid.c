@@ -9,6 +9,11 @@
 #include "param.h"
 #include "math3d.h"
 
+#ifdef PID_TRACK
+#include "eventtrigger.h"
+EVENTTRIGGER(traj_ref, float, x, float, y, float, z);
+#endif
+
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
 
 static attitude_t attitudeDesired;
@@ -160,6 +165,13 @@ void controllerPid(control_t *control, const setpoint_t *setpoint,
     // Reset the calculated YAW angle for rate control
     attitudeDesired.yaw = state->attitude.yaw;
   }
+#ifdef PID_TRACK  
+  eventTrigger_traj_ref_payload.x = setpoint->position.x;
+  eventTrigger_traj_ref_payload.y = setpoint->position.y;
+  eventTrigger_traj_ref_payload.z = setpoint->position.z;
+
+  eventTrigger(&eventTrigger_traj_ref);
+#endif
 }
 
 /**

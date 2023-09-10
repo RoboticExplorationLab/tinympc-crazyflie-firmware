@@ -24,6 +24,8 @@
  *
  */
 #define DEBUG_MODULE "STAB"
+// #define STOCK_TRACK true
+// #define PID_TRACK true
 
 #include <math.h>
 
@@ -57,6 +59,16 @@
 #include "static_mem.h"
 #include "rateSupervisor.h"
 
+// #include "eventtrigger.h"
+
+
+// EVENTTRIGGER(traj_ref, int8, traj_en, int32, traj_step, float, x, float, y, float, z);
+// EVENTTRIGGER(traj_pos, float, x, float, y, float, z);
+// EVENTTRIGGER(traj_vel, float, x, float, y, float, z);
+// EVENTTRIGGER(traj_att, float, x, float, y, float, z);
+// EVENTTRIGGER(traj_rate, float, x, float, y, float, z);
+// EVENTTRIGGER(control_event, int32, u1, int32, u2, int32, u3, int32, u4);
+
 static bool isInit;
 static bool emergencyStop = false;
 static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
@@ -65,7 +77,6 @@ static uint32_t inToOutLatency;
 
 // State variables for the stabilizer
 static setpoint_t setpoint;
-static setpoint_t setpoint_traj;
 static sensorData_t sensorData;
 static state_t state;
 static control_t control;
@@ -120,59 +131,97 @@ static struct {
   int16_t az;
 } setpointCompressed;
 
+// #ifdef STOCK_TRACK
 // FIXME 
 // START OF MY TRAJECTORY
 #include "traj_fig8_12.h"
 static uint32_t step = 0;
-static uint8_t en_traj = 0;
+static int8_t en_traj = 0;
+static int8_t en_vel_ref = 0;
 static uint32_t traj_length = 1405;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 3;       // hold current trajectory for this no of steps
+static int8_t traj_hold = 2;       // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
+static setpoint_t setpoint_traj;
 
-void updateHorizonReference(const setpoint_t *setpoint) {
-  // Update reference: from stored trajectory or commander
-  DEBUG_PRINT("%d %d\n", en_traj, step);
-  if (en_traj == 1) {
-    if (step % traj_hold == 0) {
-      traj_idx = (int)(step / traj_hold);
-      {
-        setpoint_traj.position.x = X_ref_data[traj_idx][0];
-        setpoint_traj.position.y = X_ref_data[traj_idx][1];
-        setpoint_traj.position.z = X_ref_data[traj_idx][2];
-        // setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
-        // setpoint_traj.velocity.y = X_ref_data[traj_idx][7];
-        // setpoint_traj.velocity.z = X_ref_data[traj_idx][8];
-        // setpoint_traj.attitude.roll = degrees(X_ref_data[traj_idx][];)
-        setpoint_traj.mode.x = modeAbs;
-        setpoint_traj.mode.z == modeAbs;
-        setpoint_traj.mode.yaw == modeAbs;
+// void updateHorizonReference(const setpoint_t *setpoint) {
+//   // Update reference: from stored trajectory or commander
+//   // DEBUG_PRINT("%d %d\n", en_traj, step);
+//   if (en_traj == 1) {
+//     if (step % traj_hold == 0) {
+//       traj_idx = (int)(step / traj_hold);
+//       {
+//         setpoint_traj.position.x = X_ref_data[traj_idx][0];
+//         setpoint_traj.position.y = X_ref_data[traj_idx][1];
+//         setpoint_traj.position.z = X_ref_data[traj_idx][2];
+//         if (en_vel_ref == 1) {
+//           setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
+//           setpoint_traj.velocity.y = X_ref_data[traj_idx][7];
+//           setpoint_traj.velocity.z = X_ref_data[traj_idx][8];
+//         }
+//         // setpoint_traj.attitude.roll = degrees(X_ref_data[traj_idx][];)
+//         setpoint_traj.mode.x = modeAbs;
+//         setpoint_traj.mode.z == modeAbs;
+//         setpoint_traj.mode.yaw == modeAbs;
 
-      }
-    }
-  }
-  else {
-    setpoint_traj = *setpoint;
-  }
-  // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
+//       }
+//     }
+//   }
+//   else {
+//     setpoint_traj = *setpoint;
+//   }
+//   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
-  // stop trajectory executation
-  if (en_traj == 1) {
-    if (traj_iter >= user_traj_iter) {
-      en_traj = 0;
-      DEBUG_PRINT("stop\n");
-    }
+//   // stop trajectory executation
+//   if (en_traj == 1) {
+//     if (traj_iter >= user_traj_iter) {
+//       en_traj = 0;
+//       DEBUG_PRINT("stop\n");
+//     }
 
-    if (traj_idx >= traj_length - 1 - 10 + 1) { 
-      // complete one trajectory
-      step = 0; 
-      traj_iter += 1;
-    } 
-    else step += 1;
-  }
-}
-// END OF MY TRAJECTORY
+//     if (traj_idx >= traj_length - 1 - 10 + 1) { 
+//       // complete one trajectory
+//       step = 0; 
+//       traj_iter += 1;
+//     } 
+//     else step += 1;
+//   }
+// }
+// // END OF MY TRAJECTORY
+
+
+// void usdLog() {
+//   // eventTrigger_traj_ref_payload.traj_en = en_traj;
+//   // eventTrigger_traj_ref_payload.traj_step = step;
+//   // eventTrigger_traj_ref_payload.x = setpoint_traj.position.x;
+//   // eventTrigger_traj_ref_payload.y = setpoint_traj.position.y;
+//   // eventTrigger_traj_ref_payload.z = setpoint_traj.position.z;
+//   // eventTrigger_traj_pos_payload.x = state.position.x;
+//   // eventTrigger_traj_pos_payload.y = state.position.y;
+//   // eventTrigger_traj_pos_payload.z = state.position.z;
+//   // eventTrigger_traj_att_payload.x = radians(state.attitude.roll);
+//   // eventTrigger_traj_att_payload.y = radians(-state.attitude.pitch);
+//   // eventTrigger_traj_att_payload.z = radians(state.attitude.yaw);
+//   // eventTrigger_traj_vel_payload.x = state.velocity.x;
+//   // eventTrigger_traj_vel_payload.y = state.velocity.y;
+//   // eventTrigger_traj_vel_payload.z = state.velocity.z;
+//   // eventTrigger_traj_rate_payload.x = radians(sensorData.gyro.x);
+//   // eventTrigger_traj_rate_payload.y = radians(sensorData.gyro.x);
+//   // eventTrigger_traj_rate_payload.z = radians(sensorData.gyro.z);
+//   // eventTrigger_control_event_payload.u1 = motorThrustUncapped.list[0];
+//   // eventTrigger_control_event_payload.u2 = motorThrustUncapped.list[1];
+//   // eventTrigger_control_event_payload.u3 = motorThrustUncapped.list[2];
+//   // eventTrigger_control_event_payload.u4 = motorThrustUncapped.list[3];
+
+//   // eventTrigger(&eventTrigger_traj_ref);
+//   // eventTrigger(&eventTrigger_traj_pos);
+//   // eventTrigger(&eventTrigger_traj_att);
+//   // eventTrigger(&eventTrigger_traj_vel);
+//   // eventTrigger(&eventTrigger_traj_rate);
+//   // eventTrigger(&eventTrigger_control_event);
+// }
+// #endif
 
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
@@ -245,7 +294,11 @@ void stabilizerInit(StateEstimatorType estimator)
   isInit = true;
 
   // FIXME
+#ifdef STOCK_TRACK
   traj_length = traj_length * traj_hold;
+  en_traj = 0;
+  en_vel_ref = 0;
+#endif
 }
 
 bool stabilizerTest(void)
@@ -325,6 +378,7 @@ static void stabilizerTask(void* param)
     sensorsWaitDataReady();
     sensorsWaitDataReady();
     tick++;
+
     // DEBUG_PRINT("M: %d\n", usecTimestamp() - prevStabilizerMs);
     // prevStabilizerMs = usecTimestamp();
 
@@ -356,11 +410,14 @@ static void stabilizerTask(void* param)
       // compressSetpoint();
 
       // FIXME 
-      updateHorizonReference(&setpoint);  // call every 500hz just like mpc
+// #ifdef STOCK_TRACK 
+//       updateHorizonReference(&setpoint);  // call every 500hz just like mpc
+//       controller(&control, &setpoint_traj, &sensorData, &state, tick);
+// #else
+      controller(&control, &setpoint, &sensorData, &state, tick);
+// #endif
 
       // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
-
-      controller(&control, &setpoint_traj, &sensorData, &state, tick);
 
       checkEmergencyStopTimeout();
 
@@ -402,6 +459,7 @@ static void stabilizerTask(void* param)
     motorsBurstDshot();
 #endif
   }
+
 }
 
 void stabilizerSetEmergencyStop()
@@ -425,7 +483,10 @@ void stabilizerSetEmergencyStopTimeout(int timeout)
  * for the stabilizer module, or to do an emergency stop
  */
 PARAM_GROUP_START(stabilizer)
-PARAM_ADD_CORE(PARAM_UINT8, en_traj, &en_traj)
+#ifdef STOCK_TRACK
+PARAM_ADD_CORE(PARAM_INT8, en_traj, &en_traj)
+PARAM_ADD_CORE(PARAM_INT8, en_vel_ref, &en_vel_ref)
+#endif
 /**
  * @brief Estimator type Auto select(0), complementary(1), extended kalman(2), **unscented kalman(3)  (Default: 0)
  *
@@ -606,7 +667,7 @@ STATS_CNT_RATE_LOG_ADD(rtStab, &stabilizerRate)
 /**
  * @brief Latency from sampling of sensor to motor output
  *    Note: Used for debugging but could also be used as a system test
- */
+ */ 
 LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
 LOG_GROUP_STOP(stabilizer)
 
@@ -919,3 +980,12 @@ LOG_ADD(LOG_INT32, m3req, &motorThrustBatCompUncapped.motors.m3)
  */
 LOG_ADD(LOG_INT32, m4req, &motorThrustBatCompUncapped.motors.m4)
 LOG_GROUP_STOP(motor)
+
+// #ifdef STOCK_TRACK
+LOG_GROUP_START(motorUncapped)
+LOG_ADD(LOG_INT32, m1, &motorThrustUncapped.motors.m1)
+LOG_ADD(LOG_INT32, m2, &motorThrustUncapped.motors.m2)
+LOG_ADD(LOG_INT32, m3, &motorThrustUncapped.motors.m3)
+LOG_ADD(LOG_INT32, m4, &motorThrustUncapped.motors.m4)
+LOG_GROUP_STOP(motor)
+// #endif

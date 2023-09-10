@@ -94,14 +94,6 @@ static MatrixMf R;
 
 static VectorNf Xhrz[NHORIZON];
 static VectorMf Uhrz[NHORIZON-1]; 
-
-static float Xhrz_log[NHORIZON*12];
-static float Uhrz_log[(NHORIZON-1)*4];
-static uint32_t iter_log;
-static float pri_resid_log;
-static float dual_resid_log;
-
-
 static VectorMf d[NHORIZON-1];
 static VectorNf p[NHORIZON];
 static VectorMf YU[NHORIZON];
@@ -152,15 +144,6 @@ static struct vec desired_rpy;
 static struct quat attitude;
 static struct vec phi;
 
-// declares eventTrigger_[name] and eventTrigger_[name]_payload
-// EVENTTRIGGER(traj_ref, int32, traj_en, int32, traj_step, float, x, float, y, float, z);
-// EVENTTRIGGER(traj_pos, float, x, float, y, float, z);
-// EVENTTRIGGER(traj_vel, float, x, float, y, float, z);
-// EVENTTRIGGER(traj_att, float, x, float, y, float, z);
-// EVENTTRIGGER(traj_rate, float, x, float, y, float, z);
-// EVENTTRIGGER(control, float, u1, float, u2, float, u3, float, u4);
-// EVENTTRIGGER(solver_stats, int32, solvetime_us, int32, iters);
-  
 void updateInitialState(const sensorData_t *sensors, const state_t *state) {
   x0(0) = state->position.x;
   x0(1) = state->position.y;
@@ -302,6 +285,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     return;
   }
   // Get current time
+  startTimestamp = usecTimestamp();
   updateHorizonReference(setpoint);
   /* Get current state (initial state for MPC) */
   // delta_x = x - x_bar; x_bar = 0
@@ -315,7 +299,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
   // Solve optimization problem using ADMM
   tiny_UpdateLinearCost(&work);
-  startTimestamp = usecTimestamp();
   tiny_SolveAdmm(&work);
   // vTaskDelay(M2T(1));
   // tiny_SolveAdmm(&work);
@@ -346,7 +329,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     control->normalizedForces[2] = ZU_new[0](2) + u_hover[2];
     control->normalizedForces[3] = ZU_new[0](3) + u_hover[3];
   } 
-  // DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
+  DEBUG_PRINT("pwm = [%.2f, %.2f]\n", (double)(control->normalizedForces[0]), (double)(control->normalizedForces[1]));
 
   // control->normalizedForces[0] = 0.0f;
   // control->normalizedForces[1] = 0.0f;
@@ -354,56 +337,6 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // control->normalizedForces[3] = 0.0f;
 
   control->controlMode = controlModePWM;
-
-
-  //Save results into c array
-  iter_log = info.iter;
-
-  pri_resid_log = info.pri_res;
-  dual_resid_log = info.dua_res;
-
-  for (int i=0; i<NHORIZON; i++) {
-    for (int j=0; j<12; j++) {
-      Xhrz_log[i*12 + j] = Xhrz[i](j);
-    }
-  }
-  for (int i=0; i<NHORIZON-1; i++) {
-    for (int j=0; j<4; j++) {
-      Uhrz_log[i*4 + j] = Uhrz[i](j);
-    }
-  }
-
-  // eventTrigger_traj_ref_payload.traj_en = en_traj;
-  // eventTrigger_traj_ref_payload.traj_step = step;
-  // eventTrigger_traj_ref_payload.x = Xref[0](0);
-  // eventTrigger_traj_ref_payload.y = Xref[0](1);
-  // eventTrigger_traj_ref_payload.z = Xref[0](2);
-  // eventTrigger_traj_pos_payload.x = x0(0);
-  // eventTrigger_traj_pos_payload.y = x0(1);
-  // eventTrigger_traj_pos_payload.z = x0(2);
-  // eventTrigger_traj_att_payload.x = x0(3);
-  // eventTrigger_traj_att_payload.y = x0(4);
-  // eventTrigger_traj_att_payload.z = x0(5);
-  // eventTrigger_traj_vel_payload.x = x0(6);
-  // eventTrigger_traj_vel_payload.y = x0(7);
-  // eventTrigger_traj_vel_payload.z = x0(8);
-  // eventTrigger_traj_rate_payload.x = x0(9);
-  // eventTrigger_traj_rate_payload.y = x0(10);
-  // eventTrigger_traj_rate_payload.z = x0(11);
-  // eventTrigger_control_payload.u1 = control->normalizedForces[0];
-  // eventTrigger_control_payload.u2 = control->normalizedForces[1];
-  // eventTrigger_control_payload.u3 = control->normalizedForces[2];
-  // eventTrigger_control_payload.u4 = control->normalizedForces[3];
-  // eventTrigger_solver_stats_payload.solvetime_us = mpcTime;
-  // eventTrigger_solver_stats_payload.iters = info.iter;
-
-  // eventTrigger(&eventTrigger_traj_ref);
-  // eventTrigger(&eventTrigger_traj_pos);
-  // eventTrigger(&eventTrigger_traj_att);
-  // eventTrigger(&eventTrigger_traj_vel);
-  // eventTrigger(&eventTrigger_traj_rate);
-  // eventTrigger(&eventTrigger_control);
-  // eventTrigger(&eventTrigger_solver_stats);
 }
 
 /**
@@ -424,70 +357,18 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
 
 LOG_GROUP_START(ctrlMPC)
 
-LOG_ADD(LOG_INT32, iters, &iter_log)
+LOG_ADD(LOG_INT8, result, &result)
 LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
+LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
+LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
+LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
+LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
 
-LOG_ADD(LOG_FLOAT, primal_residual, &pri_resid_log)
-LOG_ADD(LOG_FLOAT, dual_residual, &dual_resid_log)
-
-// LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
-// LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
-// LOG_ADD(LOG_FLOAT, u2, &(Uhrz[0](2)))
-// LOG_ADD(LOG_FLOAT, u3, &(Uhrz[0](3)))
-
-// LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
-// LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
-// LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
-// LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
-
-LOG_ADD(LOG_FLOAT, h_x_0, &Xhrz_log[0*12])
-LOG_ADD(LOG_FLOAT, h_x_1, &Xhrz_log[1*12])
-LOG_ADD(LOG_FLOAT, h_x_2, &Xhrz_log[2*12])
-LOG_ADD(LOG_FLOAT, h_x_3, &Xhrz_log[3*12])
-LOG_ADD(LOG_FLOAT, h_x_4, &Xhrz_log[4*12])
-LOG_ADD(LOG_FLOAT, h_x_5, &Xhrz_log[5*12])
-LOG_ADD(LOG_FLOAT, h_x_6, &Xhrz_log[6*12])
-LOG_ADD(LOG_FLOAT, h_x_7, &Xhrz_log[7*12])
-LOG_ADD(LOG_FLOAT, h_x_8, &Xhrz_log[8*12])
-LOG_ADD(LOG_FLOAT, h_x_9, &Xhrz_log[9*12])
-LOG_ADD(LOG_FLOAT, h_x_10, &Xhrz_log[10*12])
-LOG_ADD(LOG_FLOAT, h_x_11, &Xhrz_log[11*12])
-LOG_ADD(LOG_FLOAT, h_x_12, &Xhrz_log[12*12])
-LOG_ADD(LOG_FLOAT, h_x_13, &Xhrz_log[13*12])
-LOG_ADD(LOG_FLOAT, h_x_14, &Xhrz_log[14*12])
-
-LOG_ADD(LOG_FLOAT, h_y_0, &Xhrz_log[0*12+1])
-LOG_ADD(LOG_FLOAT, h_y_1, &Xhrz_log[1*12+1])
-LOG_ADD(LOG_FLOAT, h_y_2, &Xhrz_log[2*12+1])
-LOG_ADD(LOG_FLOAT, h_y_3, &Xhrz_log[3*12+1])
-LOG_ADD(LOG_FLOAT, h_y_4, &Xhrz_log[4*12+1])
-LOG_ADD(LOG_FLOAT, h_y_5, &Xhrz_log[5*12+1])
-LOG_ADD(LOG_FLOAT, h_y_6, &Xhrz_log[6*12+1])
-LOG_ADD(LOG_FLOAT, h_y_7, &Xhrz_log[7*12+1])
-LOG_ADD(LOG_FLOAT, h_y_8, &Xhrz_log[8*12+1])
-LOG_ADD(LOG_FLOAT, h_y_9, &Xhrz_log[9*12+1])
-LOG_ADD(LOG_FLOAT, h_y_10, &Xhrz_log[10*12+1])
-LOG_ADD(LOG_FLOAT, h_y_11, &Xhrz_log[11*12+1])
-LOG_ADD(LOG_FLOAT, h_y_12, &Xhrz_log[12*12+1])
-LOG_ADD(LOG_FLOAT, h_y_13, &Xhrz_log[13*12+1])
-LOG_ADD(LOG_FLOAT, h_y_14, &Xhrz_log[14*12+1])
-
-LOG_ADD(LOG_FLOAT, h_z_0, &Xhrz_log[0*12+2])
-LOG_ADD(LOG_FLOAT, h_z_1, &Xhrz_log[1*12+2])
-LOG_ADD(LOG_FLOAT, h_z_2, &Xhrz_log[2*12+2])
-LOG_ADD(LOG_FLOAT, h_z_3, &Xhrz_log[3*12+2])
-LOG_ADD(LOG_FLOAT, h_z_4, &Xhrz_log[4*12+2])
-LOG_ADD(LOG_FLOAT, h_z_5, &Xhrz_log[5*12+2])
-LOG_ADD(LOG_FLOAT, h_z_6, &Xhrz_log[6*12+2])
-LOG_ADD(LOG_FLOAT, h_z_7, &Xhrz_log[7*12+2])
-LOG_ADD(LOG_FLOAT, h_z_8, &Xhrz_log[8*12+2])
-LOG_ADD(LOG_FLOAT, h_z_9, &Xhrz_log[9*12+2])
-LOG_ADD(LOG_FLOAT, h_z_10, &Xhrz_log[10*12+2])
-LOG_ADD(LOG_FLOAT, h_z_11, &Xhrz_log[11*12+2])
-LOG_ADD(LOG_FLOAT, h_z_12, &Xhrz_log[12*12+2])
-LOG_ADD(LOG_FLOAT, h_z_13, &Xhrz_log[13*12+2])
-LOG_ADD(LOG_FLOAT, h_z_14, &Xhrz_log[14*12+2])
+LOG_ADD(LOG_FLOAT, zu0, &(ZU_new[0](0)))
+LOG_ADD(LOG_FLOAT, zu1, &(ZU_new[0](1)))
+LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
+LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
 LOG_GROUP_STOP(ctrlMPC)
 
