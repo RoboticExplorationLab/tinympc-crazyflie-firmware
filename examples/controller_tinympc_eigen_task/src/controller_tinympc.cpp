@@ -103,13 +103,30 @@ static void tinympcControllerTask(void *parameters);
 
 STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
+// // declares eventTrigger_[name] and eventTrigger_[name]_payload
+// EVENTTRIGGER(horizon_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
+// EVENTTRIGGER(horizon_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
+// EVENTTRIGGER(horizon_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
+// EVENTTRIGGER(horizon_part3, float, h15, float, h16, float, h17, float, h18, float, h19);
+// EVENTTRIGGER(iters_event, int32, iters);
+// EVENTTRIGGER(cache_level_event, int32, level);
+
 // declares eventTrigger_[name] and eventTrigger_[name]_payload
-EVENTTRIGGER(horizon_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
-EVENTTRIGGER(horizon_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
-EVENTTRIGGER(horizon_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
-EVENTTRIGGER(horizon_part3, float, h15, float, h16, float, h17, float, h18, float, h19);
-EVENTTRIGGER(iters_event, int32, iters);
-EVENTTRIGGER(cache_level_event, int32, level);
+EVENTTRIGGER(horizon_x_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
+EVENTTRIGGER(horizon_x_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
+EVENTTRIGGER(horizon_x_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
+EVENTTRIGGER(horizon_x_part4, float, h15, float, h16, float, h17, float, h18, float, h19);
+EVENTTRIGGER(horizon_y_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
+EVENTTRIGGER(horizon_y_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
+EVENTTRIGGER(horizon_y_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
+EVENTTRIGGER(horizon_y_part4, float, h15, float, h16, float, h17, float, h18, float, h19);
+EVENTTRIGGER(horizon_z_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
+EVENTTRIGGER(horizon_z_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
+EVENTTRIGGER(horizon_z_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
+EVENTTRIGGER(horizon_z_part4, float, h15, float, h16, float, h17, float, h18, float, h19);
+EVENTTRIGGER(problem_data_event, int32, solvetime_us, int32, iters, int32, cache_level);
+EVENTTRIGGER(problem_residuals_event, float, prim_resid_state, float, prim_resid_input, float, dual_resid_state, float, dual_resid_input);
+
 
 
 // Structs to keep track of data sent to and received by stabilizer loop
