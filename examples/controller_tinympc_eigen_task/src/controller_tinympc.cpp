@@ -483,10 +483,13 @@ static void tinympcControllerTask(void *parameters)
 
       // MPC solve
       problem.iter = 0;
+
+      mpc_start_timestamp = usecTimestamp();
       solve_admm(&problem, &params);
       vTaskDelay(M2T(1));
       solve_admm(&problem, &params);
-      
+      mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000; // -1000 for each vTaskDelay(M2T(1))
+
       mpc_setpoint_task = problem.x.col(NHORIZON-1);
 
       eventTrigger_horizon_x_part1_payload.h0 = problem.x.col(0)(0);
