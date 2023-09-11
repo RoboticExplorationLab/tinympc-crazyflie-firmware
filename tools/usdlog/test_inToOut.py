@@ -15,72 +15,135 @@ args = parser.parse_args()
 # decode binary log data
 logData_all = cfusdlog.decode(args.filename)
 
-# #only focus on regular logging
-logDataFixed = logData_all['fixedFrequency']
-logData1 = logData_all['horizon_part1']
-logData2 = logData_all['horizon_part2']
-logData3 = logData_all['horizon_part3']
-# logDataXref = logData_all['xref_event']
-logDataIters = logData_all['iters_event']
-logDataCacheLevel = logData_all['cache_level_event']
+logHorizonData_x_1 = logData_all['horizon_x_part1']
+logHorizonData_x_2 = logData_all['horizon_x_part2']
+logHorizonData_x_3 = logData_all['horizon_x_part3']
+# logHorizonData_x_4 = logData_all['horizon_x_part4']
+logHorizonData_y_1 = logData_all['horizon_y_part1']
+logHorizonData_y_2 = logData_all['horizon_y_part2']
+logHorizonData_y_3 = logData_all['horizon_y_part3']
+# logHorizonData_y_4 = logData_all['horizon_y_part4']
+logHorizonData_z_1 = logData_all['horizon_z_part1']
+logHorizonData_z_2 = logData_all['horizon_z_part2']
+logHorizonData_z_3 = logData_all['horizon_z_part3']
+# logHorizonData_z_4 = logData_all['horizon_z_part4']
+
+logProblemData = logData_all['problem_data_event']
+logResiduals = logData_all['problem_residuals_event']
 
 # set window background to white
 plt.rcParams['figure.facecolor'] = 'w'
     
-# # let's see which keys exists in current data set
+# # let's see which keys exist in current data set
 # keys = ""
 # for k, v in logData.items():
 #     keys += k
 
+
+subplot_rows = 7
 # current plot for simple subplot usage
-plotCurrent = 0
+plotCurrent = 1
+
+trajNames_1 = ['h0', 'h1' ,'h2', 'h3', 'h4']
+trajNames_2 = ['h5', 'h6', 'h7', 'h8', 'h9']
+trajNames_3 = ['h10', 'h11', 'h12', 'h13', 'h14']
+trajNames_4 = ['h15', 'h16', 'h17', 'h18', 'h19']
 
 # new figure
 plt.figure(args.filename)
 
-plt.subplot(3,1, 1)
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
 
-plt.plot(logData1['timestamp'], logData1['h0'], '-', label="z_0")
-# plt.plot(logData1['timestamp'], logData1['h1'], '--')#, label="z_1")
-plt.plot(logData1['timestamp'], logData1['h2'], '-')#, label="z_2")
-# plt.plot(logData1['timestamp'], logData1['h3'], '--')#, label="z_3")
-plt.plot(logData1['timestamp'], logData1['h4'], '-')#, label="z_4")
+for name in trajNames_1:
+    plt.plot(logHorizonData_x_1['timestamp'], logHorizonData_x_1[name], '-')
+for name in trajNames_2:
+    plt.plot(logHorizonData_x_2['timestamp'], logHorizonData_x_2[name], '-')
+for name in trajNames_3:
+    plt.plot(logHorizonData_x_3['timestamp'], logHorizonData_x_3[name], '-')
+# for name in trajNames_4:
+#     plt.plot(logHorizonData_x_4['timestamp'], logHorizonData_x_4[name], '-')
 
-# plt.plot(logData2['timestamp'], logData2['h5'], '--')#, label="z_5")
-plt.plot(logData2['timestamp'], logData2['h6'], '-')#, label="z_6")
-# plt.plot(logData2['timestamp'], logData2['h7'], '--')#, label="z_7")
-plt.plot(logData2['timestamp'], logData2['h8'], '-')#, label="z_8")
-# plt.plot(logData2['timestamp'], logData2['h9'], '--')#, label="z_9")
+plt.title('MPC Trajectory (x)')
+plt.xlabel('timestamp [ms]')
+plt.ylabel('Position [m]')
+plt.legend()
+plt.grid()
 
-# plt.plot(logData3['timestamp'], logData3['h10'], '--')#, label="z_10")
-plt.plot(logData3['timestamp'], logData3['h11'], '-')#, label="z_11")
-# plt.plot(logData3['timestamp'], logData3['h12'], '--')#, label="z_12")
-# plt.plot(logData3['timestamp'], logData3['h13'], '-')#, label="z_13")
-plt.plot(logData3['timestamp'], logData3['h14'], '-', label="z_14")
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
 
-# plt.plot(logDataXref['timestamp'], logDataXref['xref_z'], '-', label="xref_z")
+for name in trajNames_1:
+    plt.plot(logHorizonData_y_1['timestamp'], logHorizonData_y_1[name], '-')
+for name in trajNames_2:
+    plt.plot(logHorizonData_y_2['timestamp'], logHorizonData_y_2[name], '-')
+for name in trajNames_3:
+    plt.plot(logHorizonData_y_3['timestamp'], logHorizonData_y_3[name], '-')
+# for name in trajNames_4:
+#     plt.plot(logHorizonData_y_4['timestamp'], logHorizonData_y_4[name], '-')
 
+plt.title('MPC Trajectory (y)')
+plt.xlabel('timestamp [ms]')
+plt.ylabel('Position [m]')
+plt.legend()
+plt.grid()
 
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
+
+for name in trajNames_1:
+    plt.plot(logHorizonData_z_1['timestamp'], logHorizonData_z_1[name], '-')
+for name in trajNames_2:
+    plt.plot(logHorizonData_z_2['timestamp'], logHorizonData_z_2[name], '-')
+for name in trajNames_3:
+    plt.plot(logHorizonData_z_3['timestamp'], logHorizonData_z_3[name], '-')
+# for name in trajNames_4:
+#     plt.plot(logHorizonData_z_4['timestamp'], logHorizonData_z_4[name], '-')
+
+plt.title('MPC Trajectory (z)')
 plt.xlabel('timestamp [ms]')
 plt.ylabel('Position [m]')
 plt.legend()
 plt.grid()
 
 
-plt.subplot(3,1, 2)
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
 
-plt.scatter(logDataIters['timestamp'], logDataIters['iters'], s=.5)
+plt.scatter(logProblemData['timestamp'], logProblemData['solvetime_us'], s=.8)
+plt.xlabel('timestamp [ms]')
+plt.ylabel('Solve time [us]')
+plt.grid()
+
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
+
+plt.scatter(logProblemData['timestamp'], logProblemData['iters'], s=.8)
 plt.xlabel('timestamp [ms]')
 plt.ylabel('ADMM iters')
 plt.grid()
 
 
-plt.subplot(3,1, 3)
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
 
-plt.plot(logDataCacheLevel['timestamp'], logDataCacheLevel['level'], label="cache level")
+plt.plot(logProblemData['timestamp'], logProblemData['cache_level'], '-')
 plt.xlabel('timestamp [ms]')
 plt.ylabel('Cache level')
 plt.grid()
+
+
+plt.subplot(subplot_rows,1, plotCurrent)
+plotCurrent += 1
+
+plt.plot(logResiduals['timestamp'], logResiduals['prim_resid_state'], label='primal state residual')
+plt.plot(logResiduals['timestamp'], logResiduals['prim_resid_input'], label='primal input residual')
+plt.plot(logResiduals['timestamp'], logResiduals['dual_resid_state'], label='dual state residual')
+plt.plot(logResiduals['timestamp'], logResiduals['dual_resid_input'], label='dual input residual')
+plt.xlabel('timestamp [ms]')
+plt.ylabel('residual')
+plt.grid()
+
 
 # plt.plot(logDataFixed['timestamp'], logDataFixed['tinympc.initial_velocity'], '-', label="initial z vel")
 # # plt.axhline(0, linestyle='--', color='r')

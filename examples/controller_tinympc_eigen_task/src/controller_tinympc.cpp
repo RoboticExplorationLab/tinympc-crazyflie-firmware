@@ -87,8 +87,8 @@ extern "C"
 #include "debug.h"
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
-// #define MPC_RATE RATE_50_HZ
-#define MPC_RATE RATE_100_HZ
+#define MPC_RATE RATE_50_HZ
+// #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -282,7 +282,7 @@ void controllerOutOfTreeInit(void)
   problem.abs_tol = 0.001;
   problem.status = 0;
   problem.iter = 0;
-  problem.max_iter = 5;
+  problem.max_iter = 8;
   problem.iters_check_rho_update = 10;
   problem.cache_level = 0; // 0 to use rho corresponding to inactive constraints (1 to use rho corresponding to active constraints)
 
@@ -379,8 +379,9 @@ static void tinympcControllerTask(void *parameters)
         // traj_index++;
       }
 
+      problem.y = tiny_MatrixNuNhm1::Zero();
+      // Don't warm start dual variables
       if (problem.cache_level == 0) {
-        problem.y = tiny_MatrixNuNhm1::Zero();
         problem.g = tiny_MatrixNxNh::Zero();
       }
 
@@ -396,7 +397,7 @@ static void tinympcControllerTask(void *parameters)
           state_task.velocity.x, state_task.velocity.y, state_task.velocity.z,
           radians(sensors_task.gyro.x), radians(sensors_task.gyro.y), radians(sensors_task.gyro.z);
 
-      // Get command reference
+      // Set reference trajectory
       UpdateHorizonReference(&setpoint_task);
 
       r_obs = setpoint_task.acceleration.x;
@@ -425,13 +426,21 @@ static void tinympcControllerTask(void *parameters)
       // MPC solve
       problem.iter = 0;
       mpc_start_timestamp = usecTimestamp();
+      
       solve_admm(&problem, &params);
       vTaskDelay(M2T(1));
       solve_admm(&problem, &params);
-      mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000; // -1000 for each vTaskDelay(M2T(1))
+      vTaskDelay(M2T(1));
+      solve_admm(&problem, &params);
+      // vTaskDelay(M2T(1));
+      // solve_admm(&problem, &params);
 
-      mpc_setpoint_task = problem.x.col(NHORIZON-1);
+      mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000; // -1000us for each vTaskDelay(M2T(1))
 
+
+      // DEBUG_PRINT("y: %.4f\n", params.Xref.col(NHORIZON-1)(1));
+
+      // Write logging info to uSD card
       eventTrigger_horizon_x_part1_payload.h0 = problem.x.col(0)(0);
       eventTrigger_horizon_x_part1_payload.h1 = problem.x.col(1)(0);
       eventTrigger_horizon_x_part1_payload.h2 = problem.x.col(2)(0);
@@ -518,7 +527,9 @@ static void tinympcControllerTask(void *parameters)
       eventTrigger(&eventTrigger_problem_data_event);
       eventTrigger(&eventTrigger_problem_residuals_event);
 
+
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
+      mpc_setpoint_task = problem.x.col(NHORIZON-1);
       xSemaphoreTake(dataMutex, portMAX_DELAY);
       memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
       xSemaphoreGive(dataMutex);
