@@ -107,7 +107,7 @@ STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 EVENTTRIGGER(horizon_part1, float, h0, float, h1, float, h2, float, h3, float, h4);
 EVENTTRIGGER(horizon_part2, float, h5, float, h6, float, h7, float, h8, float, h9);
 EVENTTRIGGER(horizon_part3, float, h10, float, h11, float, h12, float, h13, float, h14);
-EVENTTRIGGER(xref_event, float, xref_z);
+EVENTTRIGGER(horizon_part3, float, h15, float, h16, float, h17, float, h18, float, h19);
 EVENTTRIGGER(iters_event, int32, iters);
 EVENTTRIGGER(cache_level_event, int32, level);
 
