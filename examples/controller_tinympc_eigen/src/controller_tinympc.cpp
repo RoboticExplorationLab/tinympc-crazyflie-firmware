@@ -100,6 +100,56 @@ static float Uhrz_log[(NHORIZON-1)*4];
 static uint32_t iter_log;
 static float pri_resid_log;
 static float dual_resid_log;
+static float ref_x;
+static float ref_y;
+static float ref_z;
+// static float Xhrz_log_x_0;
+// static float Xhrz_log_x_1;
+// static float Xhrz_log_x_2;
+// static float Xhrz_log_x_3;
+// static float Xhrz_log_x_4;
+// static float Xhrz_log_x_5;
+// static float Xhrz_log_x_6;
+// static float Xhrz_log_x_7;
+// static float Xhrz_log_x_8;
+// static float Xhrz_log_x_9;
+// static float Xhrz_log_x_10;
+// static float Xhrz_log_x_11;
+// static float Xhrz_log_x_12;
+// static float Xhrz_log_x_13;
+// static float Xhrz_log_x_14;
+
+// static float Xhrz_log_y_0;
+// static float Xhrz_log_y_1;
+// static float Xhrz_log_y_2;
+// static float Xhrz_log_y_3;
+// static float Xhrz_log_y_4;
+// static float Xhrz_log_y_5;
+// static float Xhrz_log_y_6;
+// static float Xhrz_log_y_7;
+// static float Xhrz_log_y_8;
+// static float Xhrz_log_y_9;
+// static float Xhrz_log_y_10;
+// static float Xhrz_log_y_11;
+// static float Xhrz_log_y_12;
+// static float Xhrz_log_y_13;
+// static float Xhrz_log_y_14;
+
+// static float Xhrz_log_z_0;
+// static float Xhrz_log_z_1;
+// static float Xhrz_log_z_2;
+// static float Xhrz_log_z_3;
+// static float Xhrz_log_z_4;
+// static float Xhrz_log_z_5;
+// static float Xhrz_log_z_6;
+// static float Xhrz_log_z_7;
+// static float Xhrz_log_z_8;
+// static float Xhrz_log_z_9;
+// static float Xhrz_log_z_10;
+// static float Xhrz_log_z_11;
+// static float Xhrz_log_z_12;
+// static float Xhrz_log_z_13;
+// static float Xhrz_log_z_14;
 
 
 static VectorMf d[NHORIZON-1];
@@ -137,7 +187,9 @@ static tiny_AdmmWorkspace work;
 static uint64_t startTimestamp;
 static bool isInit = false;  // fix for tracking problem
 static uint32_t mpcTime = 0;
-static float u_hover[4] = {0.7479f, 0.6682f, 0.78f, 0.67f};  // cf1
+// static float u_hover[4] = {0.7479f, 0.6682f, 0.78f, 0.67f};  // cf1
+// static float u_hover[4] = {0.5074f, 0.5188f, 0.555f, 0.4914f};  // cf3
+static float u_hover[4] = {0.6641f, 0.6246f, 0.7216f, 0.5756f};  // cf1
 // static float u_hover[4] = {0.7f, 0.7f, 0.7f, 0.7f};  // cf2 not correct
 static int8_t result = 0;
 static uint32_t step = 0;
@@ -191,9 +243,12 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < NSTATES; ++j) {
+        for (int j = 0; j < 12; ++j) {
           Xref[i](j) = X_ref_data[traj_idx][j];
         }
+        ref_x = X_ref_data[traj_idx][0];
+        ref_y = X_ref_data[traj_idx][1];
+        ref_z = X_ref_data[traj_idx][2];
         // if (i < NHORIZON - 1) {
         //   for (int j = 0; j < NINPUTS; ++j) {
         //     Uref[i](j) = U_ref_data[traj_idx][j];
@@ -285,7 +340,7 @@ void controllerOutOfTreeInit(void) {
   stgs.tol_abs_prim = 1e-2;
 
   /* End of MPC initialization */  
-  en_traj = true;
+  en_traj = false;
   step = 0;  
   traj_iter = 0;
 }
@@ -331,7 +386,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   // DEBUG_PRINT("info.pri_res: %f\n", (double)(info.pri_res));
   // DEBUG_PRINT("info.dua_res: %f\n", (double)(info.dua_res));
   result =  info.status_val * info.iter;
-  DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
+  // DEBUG_PRINT("%d %d %d \n", info.status_val, info.iter, mpcTime);
   // DEBUG_PRINT("%.2f, %.2f, %.2f, %.2f \n", (double)(Xref[0](5)), (double)(Uhrz[0](2)), (double)(Uhrz[0](3)), (double)(ZU_new[0](0)));
   
   /* Output control */
@@ -362,16 +417,66 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
   pri_resid_log = info.pri_res;
   dual_resid_log = info.dua_res;
 
-  for (int i=0; i<NHORIZON; i++) {
-    for (int j=0; j<12; j++) {
-      Xhrz_log[i*12 + j] = Xhrz[i](j);
-    }
-  }
-  for (int i=0; i<NHORIZON-1; i++) {
-    for (int j=0; j<4; j++) {
-      Uhrz_log[i*4 + j] = Uhrz[i](j);
-    }
-  }
+
+  // Xhrz_log_x_0 = Xhrz[0](0);
+  // Xhrz_log_x_1 = Xhrz[1](0);
+  // Xhrz_log_x_2 = Xhrz[2](0);
+  // Xhrz_log_x_3 = Xhrz[3](0);
+  // Xhrz_log_x_4 = Xhrz[4](0);
+  // Xhrz_log_x_5 = Xhrz[5](0);
+  // Xhrz_log_x_6 = Xhrz[6](0);
+  // Xhrz_log_x_7 = Xhrz[7](0);
+  // Xhrz_log_x_8 = Xhrz[8](0);
+  // Xhrz_log_x_9 = Xhrz[9](0);
+  // Xhrz_log_x_10 = Xhrz[10](0);
+  // Xhrz_log_x_11 = Xhrz[11](0);
+  // Xhrz_log_x_12 = Xhrz[12](0);
+  // Xhrz_log_x_13 = Xhrz[13](0);
+  // Xhrz_log_x_14 = Xhrz[14](0);
+
+  // Xhrz_log_y_0 = Xhrz[0](1);
+  // Xhrz_log_y_1 = Xhrz[1](1);
+  // Xhrz_log_y_2 = Xhrz[2](1);
+  // Xhrz_log_y_3 = Xhrz[3](1);
+  // Xhrz_log_y_4 = Xhrz[4](1);
+  // Xhrz_log_y_5 = Xhrz[5](1);
+  // Xhrz_log_y_6 = Xhrz[6](1);
+  // Xhrz_log_y_7 = Xhrz[7](1);
+  // Xhrz_log_y_8 = Xhrz[8](1);
+  // Xhrz_log_y_9 = Xhrz[9](1);
+  // Xhrz_log_y_10 = Xhrz[10](1);
+  // Xhrz_log_y_11 = Xhrz[11](1);
+  // Xhrz_log_y_12 = Xhrz[12](1);
+  // Xhrz_log_y_13 = Xhrz[13](1);
+  // Xhrz_log_y_14 = Xhrz[14](1);
+
+  // Xhrz_log_z_0 = Xhrz[0](2);
+  // Xhrz_log_z_1 = Xhrz[1](2);
+  // Xhrz_log_z_2 = Xhrz[2](2);
+  // Xhrz_log_z_3 = Xhrz[3](2);
+  // Xhrz_log_z_4 = Xhrz[4](2);
+  // Xhrz_log_z_5 = Xhrz[5](2);
+  // Xhrz_log_z_6 = Xhrz[6](2);
+  // Xhrz_log_z_7 = Xhrz[7](2);
+  // Xhrz_log_z_8 = Xhrz[8](2);
+  // Xhrz_log_z_9 = Xhrz[9](2);
+  // Xhrz_log_z_10 = Xhrz[10](2);
+  // Xhrz_log_z_11 = Xhrz[11](2);
+  // Xhrz_log_z_12 = Xhrz[12](2);
+  // Xhrz_log_z_13 = Xhrz[13](2);
+  // Xhrz_log_z_14 = Xhrz[14](2);
+
+
+  // for (int i=0; i<NHORIZON; i++) {
+  //   for (int j=0; j<12; j++) {
+  //     Xhrz_log[i*12 + j] = Xhrz[i](j);
+  //   }
+  // }
+  // for (int i=0; i<NHORIZON-1; i++) {
+  //   for (int j=0; j<4; j++) {
+  //     Uhrz_log[i*4 + j] = Uhrz[i](j);
+  //   }
+  // }
 
   // eventTrigger_traj_ref_payload.traj_en = en_traj;
   // eventTrigger_traj_ref_payload.traj_step = step;
@@ -430,6 +535,9 @@ LOG_ADD(LOG_UINT32, mpcTime, &mpcTime)
 
 LOG_ADD(LOG_FLOAT, primal_residual, &pri_resid_log)
 LOG_ADD(LOG_FLOAT, dual_residual, &dual_resid_log)
+LOG_ADD(LOG_FLOAT, ref_x, &ref_x)
+LOG_ADD(LOG_FLOAT, ref_y, &ref_y)
+LOG_ADD(LOG_FLOAT, ref_z, &ref_z)
 
 // LOG_ADD(LOG_FLOAT, u0, &(Uhrz[0](0)))
 // LOG_ADD(LOG_FLOAT, u1, &(Uhrz[0](1)))
@@ -441,53 +549,53 @@ LOG_ADD(LOG_FLOAT, dual_residual, &dual_resid_log)
 // LOG_ADD(LOG_FLOAT, zu2, &(ZU_new[0](2)))
 // LOG_ADD(LOG_FLOAT, zu3, &(ZU_new[0](3)))
 
-LOG_ADD(LOG_FLOAT, h_x_0, &Xhrz_log[0*12])
-LOG_ADD(LOG_FLOAT, h_x_1, &Xhrz_log[1*12])
-LOG_ADD(LOG_FLOAT, h_x_2, &Xhrz_log[2*12])
-LOG_ADD(LOG_FLOAT, h_x_3, &Xhrz_log[3*12])
-LOG_ADD(LOG_FLOAT, h_x_4, &Xhrz_log[4*12])
-LOG_ADD(LOG_FLOAT, h_x_5, &Xhrz_log[5*12])
-LOG_ADD(LOG_FLOAT, h_x_6, &Xhrz_log[6*12])
-LOG_ADD(LOG_FLOAT, h_x_7, &Xhrz_log[7*12])
-LOG_ADD(LOG_FLOAT, h_x_8, &Xhrz_log[8*12])
-LOG_ADD(LOG_FLOAT, h_x_9, &Xhrz_log[9*12])
-LOG_ADD(LOG_FLOAT, h_x_10, &Xhrz_log[10*12])
-LOG_ADD(LOG_FLOAT, h_x_11, &Xhrz_log[11*12])
-LOG_ADD(LOG_FLOAT, h_x_12, &Xhrz_log[12*12])
-LOG_ADD(LOG_FLOAT, h_x_13, &Xhrz_log[13*12])
-LOG_ADD(LOG_FLOAT, h_x_14, &Xhrz_log[14*12])
+// LOG_ADD(LOG_FLOAT, h_x_0, &Xhrz_log_x_0)
+// LOG_ADD(LOG_FLOAT, h_x_1, &Xhrz_log_x_1)
+// LOG_ADD(LOG_FLOAT, h_x_2, &Xhrz_log_x_2)
+// LOG_ADD(LOG_FLOAT, h_x_3, &Xhrz_log_x_3)
+// LOG_ADD(LOG_FLOAT, h_x_4, &Xhrz_log_x_4)
+// LOG_ADD(LOG_FLOAT, h_x_5, &Xhrz_log_x_5)
+// LOG_ADD(LOG_FLOAT, h_x_6, &Xhrz_log_x_6)
+// LOG_ADD(LOG_FLOAT, h_x_7, &Xhrz_log_x_7)
+// LOG_ADD(LOG_FLOAT, h_x_8, &Xhrz_log_x_8)
+// LOG_ADD(LOG_FLOAT, h_x_9, &Xhrz_log_x_9)
+// LOG_ADD(LOG_FLOAT, h_x_10, &Xhrz_log_x_10)
+// LOG_ADD(LOG_FLOAT, h_x_11, &Xhrz_log_x_11)
+// LOG_ADD(LOG_FLOAT, h_x_12, &Xhrz_log_x_12)
+// LOG_ADD(LOG_FLOAT, h_x_13, &Xhrz_log_x_13)
+// LOG_ADD(LOG_FLOAT, h_x_14, &Xhrz_log_x_14)
 
-LOG_ADD(LOG_FLOAT, h_y_0, &Xhrz_log[0*12+1])
-LOG_ADD(LOG_FLOAT, h_y_1, &Xhrz_log[1*12+1])
-LOG_ADD(LOG_FLOAT, h_y_2, &Xhrz_log[2*12+1])
-LOG_ADD(LOG_FLOAT, h_y_3, &Xhrz_log[3*12+1])
-LOG_ADD(LOG_FLOAT, h_y_4, &Xhrz_log[4*12+1])
-LOG_ADD(LOG_FLOAT, h_y_5, &Xhrz_log[5*12+1])
-LOG_ADD(LOG_FLOAT, h_y_6, &Xhrz_log[6*12+1])
-LOG_ADD(LOG_FLOAT, h_y_7, &Xhrz_log[7*12+1])
-LOG_ADD(LOG_FLOAT, h_y_8, &Xhrz_log[8*12+1])
-LOG_ADD(LOG_FLOAT, h_y_9, &Xhrz_log[9*12+1])
-LOG_ADD(LOG_FLOAT, h_y_10, &Xhrz_log[10*12+1])
-LOG_ADD(LOG_FLOAT, h_y_11, &Xhrz_log[11*12+1])
-LOG_ADD(LOG_FLOAT, h_y_12, &Xhrz_log[12*12+1])
-LOG_ADD(LOG_FLOAT, h_y_13, &Xhrz_log[13*12+1])
-LOG_ADD(LOG_FLOAT, h_y_14, &Xhrz_log[14*12+1])
+// LOG_ADD(LOG_FLOAT, h_y_0, &Xhrz_log_y_0)
+// LOG_ADD(LOG_FLOAT, h_y_1, &Xhrz_log_y_1)
+// LOG_ADD(LOG_FLOAT, h_y_2, &Xhrz_log_y_2)
+// LOG_ADD(LOG_FLOAT, h_y_3, &Xhrz_log_y_3)
+// LOG_ADD(LOG_FLOAT, h_y_4, &Xhrz_log_y_4)
+// LOG_ADD(LOG_FLOAT, h_y_5, &Xhrz_log_y_5)
+// LOG_ADD(LOG_FLOAT, h_y_6, &Xhrz_log_y_6)
+// LOG_ADD(LOG_FLOAT, h_y_7, &Xhrz_log_y_7)
+// LOG_ADD(LOG_FLOAT, h_y_8, &Xhrz_log_y_8)
+// LOG_ADD(LOG_FLOAT, h_y_9, &Xhrz_log_y_9)
+// LOG_ADD(LOG_FLOAT, h_y_10, &Xhrz_log_y_10)
+// LOG_ADD(LOG_FLOAT, h_y_11, &Xhrz_log_y_11)
+// LOG_ADD(LOG_FLOAT, h_y_12, &Xhrz_log_y_12)
+// LOG_ADD(LOG_FLOAT, h_y_13, &Xhrz_log_y_13)
+// LOG_ADD(LOG_FLOAT, h_y_14, &Xhrz_log_y_14)
 
-LOG_ADD(LOG_FLOAT, h_z_0, &Xhrz_log[0*12+2])
-LOG_ADD(LOG_FLOAT, h_z_1, &Xhrz_log[1*12+2])
-LOG_ADD(LOG_FLOAT, h_z_2, &Xhrz_log[2*12+2])
-LOG_ADD(LOG_FLOAT, h_z_3, &Xhrz_log[3*12+2])
-LOG_ADD(LOG_FLOAT, h_z_4, &Xhrz_log[4*12+2])
-LOG_ADD(LOG_FLOAT, h_z_5, &Xhrz_log[5*12+2])
-LOG_ADD(LOG_FLOAT, h_z_6, &Xhrz_log[6*12+2])
-LOG_ADD(LOG_FLOAT, h_z_7, &Xhrz_log[7*12+2])
-LOG_ADD(LOG_FLOAT, h_z_8, &Xhrz_log[8*12+2])
-LOG_ADD(LOG_FLOAT, h_z_9, &Xhrz_log[9*12+2])
-LOG_ADD(LOG_FLOAT, h_z_10, &Xhrz_log[10*12+2])
-LOG_ADD(LOG_FLOAT, h_z_11, &Xhrz_log[11*12+2])
-LOG_ADD(LOG_FLOAT, h_z_12, &Xhrz_log[12*12+2])
-LOG_ADD(LOG_FLOAT, h_z_13, &Xhrz_log[13*12+2])
-LOG_ADD(LOG_FLOAT, h_z_14, &Xhrz_log[14*12+2])
+// LOG_ADD(LOG_FLOAT, h_z_0, &Xhrz_log_z_0)
+// LOG_ADD(LOG_FLOAT, h_z_1, &Xhrz_log_z_1)
+// LOG_ADD(LOG_FLOAT, h_z_2, &Xhrz_log_z_2)
+// LOG_ADD(LOG_FLOAT, h_z_3, &Xhrz_log_z_3)
+// LOG_ADD(LOG_FLOAT, h_z_4, &Xhrz_log_z_4)
+// LOG_ADD(LOG_FLOAT, h_z_5, &Xhrz_log_z_5)
+// LOG_ADD(LOG_FLOAT, h_z_6, &Xhrz_log_z_6)
+// LOG_ADD(LOG_FLOAT, h_z_7, &Xhrz_log_z_7)
+// LOG_ADD(LOG_FLOAT, h_z_8, &Xhrz_log_z_8)
+// LOG_ADD(LOG_FLOAT, h_z_9, &Xhrz_log_z_9)
+// LOG_ADD(LOG_FLOAT, h_z_10, &Xhrz_log_z_10)
+// LOG_ADD(LOG_FLOAT, h_z_11, &Xhrz_log_z_11)
+// LOG_ADD(LOG_FLOAT, h_z_12, &Xhrz_log_z_12)
+// LOG_ADD(LOG_FLOAT, h_z_13, &Xhrz_log_z_13)
+// LOG_ADD(LOG_FLOAT, h_z_14, &Xhrz_log_z_14)
 
 LOG_GROUP_STOP(ctrlMPC)
 

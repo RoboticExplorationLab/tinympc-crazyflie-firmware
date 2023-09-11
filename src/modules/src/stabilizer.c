@@ -24,8 +24,7 @@
  *
  */
 #define DEBUG_MODULE "STAB"
-// #define STOCK_TRACK true
-// #define PID_TRACK true
+// #define STOCK_TRACK 1
 
 #include <math.h>
 
@@ -131,7 +130,7 @@ static struct {
   int16_t az;
 } setpointCompressed;
 
-// #ifdef STOCK_TRACK
+#ifdef STOCK_TRACK
 // FIXME 
 // START OF MY TRAJECTORY
 #include "traj_fig8_12.h"
@@ -145,50 +144,50 @@ static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 static setpoint_t setpoint_traj;
 
-// void updateHorizonReference(const setpoint_t *setpoint) {
-//   // Update reference: from stored trajectory or commander
-//   // DEBUG_PRINT("%d %d\n", en_traj, step);
-//   if (en_traj == 1) {
-//     if (step % traj_hold == 0) {
-//       traj_idx = (int)(step / traj_hold);
-//       {
-//         setpoint_traj.position.x = X_ref_data[traj_idx][0];
-//         setpoint_traj.position.y = X_ref_data[traj_idx][1];
-//         setpoint_traj.position.z = X_ref_data[traj_idx][2];
-//         if (en_vel_ref == 1) {
-//           setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
-//           setpoint_traj.velocity.y = X_ref_data[traj_idx][7];
-//           setpoint_traj.velocity.z = X_ref_data[traj_idx][8];
-//         }
-//         // setpoint_traj.attitude.roll = degrees(X_ref_data[traj_idx][];)
-//         setpoint_traj.mode.x = modeAbs;
-//         setpoint_traj.mode.z == modeAbs;
-//         setpoint_traj.mode.yaw == modeAbs;
+void updateHorizonReference(const setpoint_t *setpoint) {
+  // Update reference: from stored trajectory or commander
+  // DEBUG_PRINT("%d %d\n", en_traj, step);
+  if (en_traj == 1) {
+    if (step % traj_hold == 0) {
+      traj_idx = (int)(step / traj_hold);
+      {
+        setpoint_traj.position.x = X_ref_data[traj_idx][0];
+        setpoint_traj.position.y = X_ref_data[traj_idx][1];
+        setpoint_traj.position.z = X_ref_data[traj_idx][2];
+        if (en_vel_ref == 1) {
+          setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
+          setpoint_traj.velocity.y = X_ref_data[traj_idx][7];
+          setpoint_traj.velocity.z = X_ref_data[traj_idx][8];
+        }
+        // setpoint_traj.attitude.roll = degrees(X_ref_data[traj_idx][];)
+        setpoint_traj.mode.x = modeAbs;
+        setpoint_traj.mode.z == modeAbs;
+        setpoint_traj.mode.yaw == modeAbs;
 
-//       }
-//     }
-//   }
-//   else {
-//     setpoint_traj = *setpoint;
-//   }
-//   // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
+      }
+    }
+  }
+  else {
+    setpoint_traj = *setpoint;
+  }
+  // DEBUG_PRINT("z_ref = %.2f\n", (double)(Xref[0](2)));
 
-//   // stop trajectory executation
-//   if (en_traj == 1) {
-//     if (traj_iter >= user_traj_iter) {
-//       en_traj = 0;
-//       DEBUG_PRINT("stop\n");
-//     }
+  // stop trajectory executation
+  if (en_traj == 1) {
+    if (traj_iter >= user_traj_iter) {
+      en_traj = 0;
+      DEBUG_PRINT("stop\n");
+    }
 
-//     if (traj_idx >= traj_length - 1 - 10 + 1) { 
-//       // complete one trajectory
-//       step = 0; 
-//       traj_iter += 1;
-//     } 
-//     else step += 1;
-//   }
-// }
-// // END OF MY TRAJECTORY
+    if (traj_idx >= traj_length - 1 - 10 + 1) { 
+      // complete one trajectory
+      step = 0; 
+      traj_iter += 1;
+    } 
+    else step += 1;
+  }
+}
+// END OF MY TRAJECTORY
 
 
 // void usdLog() {
@@ -221,7 +220,7 @@ static setpoint_t setpoint_traj;
 //   // eventTrigger(&eventTrigger_traj_rate);
 //   // eventTrigger(&eventTrigger_control_event);
 // }
-// #endif
+#endif
 
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
@@ -410,12 +409,12 @@ static void stabilizerTask(void* param)
       // compressSetpoint();
 
       // FIXME 
-// #ifdef STOCK_TRACK 
-//       updateHorizonReference(&setpoint);  // call every 500hz just like mpc
-//       controller(&control, &setpoint_traj, &sensorData, &state, tick);
-// #else
+#ifdef STOCK_TRACK 
+      updateHorizonReference(&setpoint);  // call every 500hz just like mpc
+      controller(&control, &setpoint_traj, &sensorData, &state, tick);
+#else
       controller(&control, &setpoint, &sensorData, &state, tick);
-// #endif
+#endif
 
       // collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
@@ -989,3 +988,13 @@ LOG_ADD(LOG_INT32, m3, &motorThrustUncapped.motors.m3)
 LOG_ADD(LOG_INT32, m4, &motorThrustUncapped.motors.m4)
 LOG_GROUP_STOP(motor)
 // #endif
+
+#ifdef STOCK_TRACK
+LOG_GROUP_START(trajRef)
+LOG_ADD(LOG_FLOAT, x, &setpoint_traj.position.x)
+LOG_ADD(LOG_FLOAT, y, &setpoint_traj.position.y)
+LOG_ADD(LOG_FLOAT, z, &setpoint_traj.position.z)
+LOG_ADD(LOG_INT8, traj_en, &en_traj)
+LOG_ADD(LOG_UINT32, traj_step, &step)
+LOG_GROUP_STOP(trajRef)
+#endif

@@ -15,21 +15,8 @@ args = parser.parse_args()
 # decode binary log data
 logData = cfusdlog.decode(args.filename)
 
-# let's see which keys exists in current data set
-keys = ""
-for k, v in logData.items():
-    keys += k
-    print(k)
-
 #only focus on regular logging
-logData_control = logData['control']
-logData_traj_ref = logData['traj_ref']
-logData_traj_pos = logData['traj_pos']
-logData_traj_att = logData['traj_att']
-logData_traj_vel = logData['traj_vel']
-logData_traj_rate = logData['traj_rate']
-logData_solver_stats = logData['solver_stats']
-logData_ff = logData['fixedFrequency']
+logData = logData['fixedFrequency']
 
 # set window background to white
 plt.rcParams['figure.facecolor'] = 'w'
@@ -40,7 +27,7 @@ plotRows = 6
 
 # let's see which keys exists in current data set
 keys = ""
-for k, v in logData_solver_stats.items():
+for k, v in logData.items():
     keys += k
     print(k)
     
@@ -50,67 +37,54 @@ plotCurrent = 0
 # new figure
 plt.figure(args.filename)
 
-# if re.search('stabilizer', keys):
+# if re.search('ctrlMPC', keys):
 #     plotCurrent += 1
 #     plt.subplot(plotRows, plotCols, plotCurrent)
-#     plt.plot(logData['timestamp'], logData['stabilizer.intToOut'], '-')
+#     plt.plot(logData['timestamp'], logData['ctrlMPC.ref_x'], '-', label='X')
+#     plt.plot(logData['timestamp'], logData['ctrlMPC.ref_y'], '-', label='Y')
+#     # plt.plot(logData['timestamp'], logData['ctrlMPC.ref_z'], '-', label='Z')
 #     plt.xlabel('timestamp [ms]')
-#     plt.ylabel('Time [us]')
- 
-# if re.search('stateEstimate', keys):
-plotCurrent += 1
-plt.subplot(plotRows, plotCols, plotCurrent)
-# plt.plot(logData['timestamp'], logData['stateEstimate.x'], '-', label='X')
-# plt.plot(logData['timestamp'], logData['stateEstimate.y'], '-', label='Y')
-plt.plot(logData_ff['timestamp'], logData_ff['stateEstimate.z'], '-', label='Z')
-plt.xlabel('timestamp [ms]')
-plt.ylabel('postion [m]')
-plt.ylim((0, 1.2))
-plt.grid()
+#     plt.ylabel('reference [m]')
+#     plt.ylim((-1.2, 1.2))
+#     # plt.grid()
 
-# if re.search('stateEstimate', keys):
-#     plotCurrent += 1
-#     plt.subplot(plotRows, plotCols, plotCurrent)
-#     plt.plot(logData['timestamp'], logData['stateEstimate.qx'], '-', label='X')
-#     plt.plot(logData['timestamp'], logData['stateEstimate.qy'], '-', label='Y')
-#     plt.plot(logData['timestamp'], logData['stateEstimate.qz'], '-', label='Z')
-#     plt.plot(logData['timestamp'], logData['stateEstimate.qw'], '-', label='Z')
-#     plt.xlabel('timestamp [ms]')
-#     plt.ylabel('Quaternion')
+if re.search('stateEstimate', keys):
+    plotCurrent += 1
+    plt.subplot(plotRows, plotCols, plotCurrent)
+    plt.plot(logData['timestamp'], logData['stateEstimate.x'], '-', label='X')
+    plt.plot(logData['timestamp'], logData['stateEstimate.y'], '-', label='Y')
+    plt.plot(logData['timestamp'], logData['stateEstimate.z'], '-', label='Z')
+    plt.xlabel('timestamp [ms]')
+    plt.ylabel('position [m]')
 
-plotCurrent += 1
-plt.subplot(plotRows, plotCols, plotCurrent)
-plt.plot(logData_control['timestamp'], logData_control['u1'], '-', label='u1')
-plt.plot(logData_control['timestamp'], logData_control['u2'], '-', label='u2')
-plt.plot(logData_control['timestamp'], logData_control['u3'], '-', label='u3')
-plt.plot(logData_control['timestamp'], logData_control['u4'], '-', label='u4')
-plt.xlabel('timestamp [ms]')
-plt.ylabel('control [m]')
-plt.grid()
+    plotCurrent += 1
+    plt.subplot(plotRows, plotCols, plotCurrent)
+    plt.plot(logData['timestamp'], logData['stateEstimate.roll'], '-', label='X')
+    plt.plot(logData['timestamp'], logData['stateEstimate.pitch'], '-', label='Y')
+    plt.plot(logData['timestamp'], logData['stateEstimate.yaw'], '-', label='Z')
+    plt.xlabel('timestamp [ms]')
+    plt.ylabel('attitude')
 
-plotCurrent += 1
-plt.subplot(plotRows, plotCols, plotCurrent)
-plt.plot(logData_traj_ref['timestamp'], logData_traj_ref['x'], '-', label='u1')
-plt.plot(logData_traj_ref['timestamp'], logData_traj_ref['y'], '-', label='u2')
-plt.plot(logData_traj_ref['timestamp'], logData_traj_ref['z'], '-', label='u3')
-plt.xlabel('timestamp [ms]')
-plt.ylabel('reference [m]')
-plt.grid()
+if re.search('motorUncapped', keys):
+    plotCurrent += 1
+    plt.subplot(plotRows, plotCols, plotCurrent)
+    plt.plot(logData['timestamp'], logData['motorUncapped.m1'], '-', label='u1')
+    plt.plot(logData['timestamp'], logData['motorUncapped.m2'], '-', label='u2')
+    plt.plot(logData['timestamp'], logData['motorUncapped.m3'], '-', label='u3')
+    plt.plot(logData['timestamp'], logData['motorUncapped.m4'], '-', label='u4')
+    plt.axhline(65535, linestyle='--', color='r')
+    plt.xlabel('timestamp [ms]')
+    plt.ylabel('control [m]')
+    plt.grid()
 
 plotCurrent += 1
 plt.subplot(plotRows, plotCols, plotCurrent)
-plt.plot(logData_traj_ref['timestamp'], logData_traj_pos['x'], '-', label='u1')
-plt.plot(logData_traj_ref['timestamp'], logData_traj_pos['y'], '-', label='u2')
-plt.plot(logData_traj_ref['timestamp'], logData_traj_pos['z'], '-', label='u3')
+# plt.plot(logData['timestamp'], logData['stabilizer.intToOut'], '-', label='inOut')
+plt.plot(logData['timestamp'], logData['ctrlMPC.dual_residual'], '-', label='dual')
+plt.plot(logData['timestamp'], logData['ctrlMPC.primal_residual'], '-', label='primal')
+plt.plot(logData['timestamp'], logData['ctrlMPC.iters'], '-', label='iters')
 plt.xlabel('timestamp [ms]')
-plt.ylabel('reference [m]')
-plt.grid()
-
-plotCurrent += 1
-plt.subplot(plotRows, plotCols, plotCurrent)
-plt.plot(logData_solver_stats['timestamp'], logData_solver_stats['iters'], '-', label='iters')
-plt.xlabel('timestamp [ms]')
-plt.ylabel('reference [m]')
+plt.ylabel('stats')
 plt.grid()
 
 plt.show()

@@ -57,13 +57,13 @@ plt.figure(args.filename)
 # if re.search('stateEstimate', keys):
 plotCurrent += 1
 plt.subplot(plotRows, plotCols, plotCurrent)
-# plt.plot(logData['timestamp'], logData['stateEstimate.x'], '-', label='X')
-# plt.plot(logData['timestamp'], logData['stateEstimate.y'], '-', label='Y')
-plt.plot(logData_ff['timestamp'], logData_ff['stateEstimate.z'], '-', label='Z')
-print(logData_ff['stateEstimate.z'])
+# plt.plot(logData_ff['timestamp'], logData_ff['ctrlMPC.mpcTime'], '-', label='X')
+plt.plot(logData_ff['timestamp'], logData_ff['ctrlMPC.primal_residual'], '-', label='Y')
+# plt.plot(logData_ff['timestamp'], logData_ff['stateEstimate.x'], '-', label='Z')
+print(logData_ff['ctrlMPC.dual_residual'])
 plt.xlabel('timestamp [ms]')
 plt.ylabel('postion [m]')
-plt.ylim((0, 1.2))
+# plt.ylim((0, 1.2))
 plt.grid()
 
 # if re.search('stateEstimate', keys):
