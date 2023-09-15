@@ -24,7 +24,7 @@
  *
  */
 #define DEBUG_MODULE "STAB"
-// #define STOCK_TRACK 1
+#define STOCK_TRACK 1
 
 #include <math.h>
 
@@ -139,7 +139,7 @@ static int8_t en_traj = 0;
 static int8_t en_vel_ref = 0;
 static uint32_t traj_length = 1405;
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 2;       // hold current trajectory for this no of steps
+static int8_t traj_hold = 3;       // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 static setpoint_t setpoint_traj;

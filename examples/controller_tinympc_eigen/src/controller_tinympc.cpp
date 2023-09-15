@@ -196,7 +196,7 @@ static uint32_t step = 0;
 static bool en_traj = false;
 static uint32_t traj_length = T_ARRAY_SIZE(X_ref_data);
 static int8_t user_traj_iter = 1;  // number of times to execute full trajectory
-static int8_t traj_hold = 2;       // hold current trajectory for this no of steps
+static int8_t traj_hold = 3;       // hold current trajectory for this no of steps
 static int8_t traj_iter = 0;
 static uint32_t traj_idx = 0;
 
@@ -340,7 +340,7 @@ void controllerOutOfTreeInit(void) {
   stgs.tol_abs_prim = 1e-2;
 
   /* End of MPC initialization */  
-  en_traj = false;
+  en_traj = true;
   step = 0;  
   traj_iter = 0;
 }
