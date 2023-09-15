@@ -64,9 +64,9 @@ if re.search('trajRef', keys):
 if re.search('stateEstimate', keys):
     plotCurrent += 1
     plt.subplot(plotRows, plotCols, plotCurrent)
-    plt.plot(logData['timestamp'], logData['stateEstimate.x'], '-', label='X')
-    plt.plot(logData['timestamp'], logData['stateEstimate.y'], '-', label='Y')
-    plt.plot(logData['timestamp'], logData['stateEstimate.z'], '-', label='Z')
+    plt.plot(logData['timestamp'], logData['stateEstimate.vx'], '-', label='X')
+    plt.plot(logData['timestamp'], logData['stateEstimate.vy'], '-', label='Y')
+    plt.plot(logData['timestamp'], logData['stateEstimate.vz'], '-', label='Z')
     plt.xlabel('timestamp [ms]')
     plt.ylabel('position [m]')
 
