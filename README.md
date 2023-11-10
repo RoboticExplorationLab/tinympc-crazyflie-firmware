@@ -2,7 +2,13 @@
 
 This project contains the source code for the TinyMPC-integrated firmware used in the Crazyflie 2.1.
 
-Currently, it supports full-state quaternion-based LQR or LQI controller within app layer in `examples/controller_lqr` and `examples/controller_lqi`. Nothing like these have existed before in the Crazyflie 2.1.
+Currently, it supports:
+
+* Full-state quaternion-based LQR or LQI controller within the app layer in `examples/controller_lqr` and `examples/controller_lqi`.
+* Full-state quaternion-based TinyMPC with significantly hacked code in `example/controller_mpc*`.
+* Some other related stuff.
+
+Nothing like these have existed before in the Crazyflie 2.1 that we are aware of. Feel free to reach out to the developers if you have any questions. We may be able to help you to deploy it on your own Crazyflie.
 
 ### Crazyflie 1.0 support
 
