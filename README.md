@@ -1,6 +1,6 @@
 # Crazyflie Firmware  [![CI](https://github.com/bitcraze/crazyflie-firmware/workflows/CI/badge.svg)](https://github.com/bitcraze/crazyflie-firmware/actions?query=workflow%3ACI)
 
-This project contains the source code for the TinyMPC-integrated firmware used in the Crazyflie 2.1.
+This repo contains the source code for the TinyMPC-integrated firmware used in the Crazyflie 2.1. TinyMPC is publicly available at [tinympc.org](https://tinympc.org/).
 
 Currently, it supports (a little bit messy in different branches):
 
@@ -8,7 +8,7 @@ Currently, it supports (a little bit messy in different branches):
 * Full-state quaternion-based TinyMPC with significantly hacked code in `example/controller_mpc*`.
 * Some other related stuff.
 
-Nothing like these have existed before in the Crazyflie 2.1 that we are aware of. Feel free to reach out to the developers if you have any questions. We may be able to help you to deploy it on your own Crazyflie.
+Nothing like these have existed before in the Crazyflie 2.1 that we are aware of. Feel free to reach out to the developers if you have any questions. 
 
 ### Crazyflie 1.0 support
 
