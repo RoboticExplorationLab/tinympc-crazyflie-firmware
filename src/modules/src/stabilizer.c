@@ -24,7 +24,7 @@
  *
  */
 #define DEBUG_MODULE "STAB"
-#define STOCK_TRACK 1
+// #define STOCK_TRACK 1
 
 #include <math.h>
 
@@ -153,7 +153,7 @@ void updateHorizonReference(const setpoint_t *setpoint) {
       {
         setpoint_traj.position.x = X_ref_data[traj_idx][0];
         setpoint_traj.position.y = X_ref_data[traj_idx][1];
-        setpoint_traj.position.z = X_ref_data[traj_idx][2];
+        setpoint_traj.position.z = X_ref_data[traj_idx][2]*0.8;
         if (en_vel_ref == 1) {
           setpoint_traj.velocity.x = X_ref_data[traj_idx][6];
           setpoint_traj.velocity.y = X_ref_data[traj_idx][7];

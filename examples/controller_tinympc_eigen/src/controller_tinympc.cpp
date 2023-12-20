@@ -243,7 +243,10 @@ void updateHorizonReference(const setpoint_t *setpoint) {
     if (step % traj_hold == 0) {
       traj_idx = (int)(step / traj_hold);
       for (int i = 0; i < NHORIZON; ++i) {
-        for (int j = 0; j < 12; ++j) {
+        for (int j = 0; j < 3; ++j) {
+          Xref[i](j) = X_ref_data[traj_idx][j];
+        }
+        for (int j = 6; j < 9; ++j) {
           Xref[i](j) = X_ref_data[traj_idx][j];
         }
         ref_x = X_ref_data[traj_idx][0];
