@@ -9,8 +9,8 @@
 #include "controller_brescianini.h"
 #include "autoconf.h"
 
-#define DEFAULT_CONTROLLER ControllerTypePID
-// #define DEFAULT_CONTROLLER ControllerTypeOot
+// #define DEFAULT_CONTROLLER ControllerTypePID
+#define DEFAULT_CONTROLLER ControllerTypeOot
 static ControllerType currentController = ControllerTypeAutoSelect;
 
 static void initController();
