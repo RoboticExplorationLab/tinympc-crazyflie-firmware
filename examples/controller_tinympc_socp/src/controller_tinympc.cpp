@@ -32,6 +32,7 @@ extern "C"
 // TinyMPC and PID controllers
 #include "tinympc/admm.hpp"
 #include "controller_pid.h"
+#include "controller_brescianini.h"
 
 // Params
 // #include "quadrotor_20hz_params.hpp"
@@ -46,9 +47,11 @@ extern "C"
 
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
-#define MPC_RATE RATE_50_HZ /
+// #define RATE_25_HZ 25
+#define MPC_RATE RATE_50_HZ
 // #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
+#define USE_PID 0  // 1 for PID (state setpoint), 0 for Brescianini (accel setpoint)
 
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -65,31 +68,34 @@ STATIC_MEM_TASK_ALLOC(tinympcControllerTask, TINYMPC_TASK_STACKSIZE);
 
 // Structs to keep track of data sent to and received by stabilizer loop
 // Stabilizer loop updates/uses these
-control_t control_data;
-setpoint_t setpoint_data;
-sensorData_t sensors_data;
-state_t state_data;
-tiny_VectorNx mpc_setpoint;
-setpoint_t mpc_setpoint_pid;
+static control_t control_data;
+static setpoint_t setpoint_data;
+static sensorData_t sensors_data;
+static state_t state_data;
+static tiny_VectorNx mpc_setpoint;
+static setpoint_t mpc_setpoint_pid;
 // Copies that stay constant for duration of MPC loop
-setpoint_t setpoint_task;
-sensorData_t sensors_task;
-state_t state_task;
-control_t control_task;
-tiny_VectorNx mpc_setpoint_task;
+static setpoint_t setpoint_task;
+static sensorData_t sensors_task;
+static state_t state_task;
+static control_t control_task;
+static tiny_VectorNx mpc_setpoint_task;
 
 /* Allocate global variables for MPC */
-TinyBounds bounds;
-TinySocs socs;
-TinyWorkspace work;
-TinyCache cache;
-TinySettings settings;
-TinySolver solver{&settings, &cache, &work};
+static TinyBounds bounds;
+static TinySocs socs;
+static TinyWorkspace work;
+static TinyCache cache;
+static TinySettings settings;
+static TinySolver solver{&settings, &cache, &work};
 
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
 static tiny_VectorNu u_lqr;
 static tiny_VectorNx current_state;
+static tiny_VectorNx xinit;
+static tiny_VectorNx xg;
+static tiny_VectorNx x0;
 
 // Helper variables
 static bool enable_traj = false;
@@ -103,35 +109,6 @@ static uint32_t mpc_time_us;
 static struct vec phi; // For converting from the current state estimate's quaternion to Rodrigues parameters
 static bool isInit = false;
 
-static inline float quat_dot(quaternion_t a, quaternion_t b)
-{
-  return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
-}
-
-static inline quaternion_t make_quat(float x, float y, float z, float w)
-{
-  quaternion_t q;
-  q.x = x;
-  q.y = y;
-  q.z = z;
-  q.w = w;
-  return q;
-}
-
-static inline quaternion_t normalize_quat(quaternion_t q)
-{
-  float s = 1.0f / sqrtf(quat_dot(q, q));
-  return make_quat(s * q.x, s * q.y, s * q.z, s * q.w);
-}
-
-static inline struct vec quat_2_rp(quaternion_t q)
-{
-  struct vec v;
-  v.x = q.x / q.w;
-  v.y = q.y / q.w;
-  v.z = q.z / q.w;
-  return v;
-}
 
 void appMain()
 {
@@ -142,10 +119,21 @@ void appMain()
     vTaskDelay(M2T(2000));  //TODO: Can I make this really big?
   }
 }
+bool controllerOutOfTreeTest()
+{
+  // Always return true
+  return true;
+}
+
 
 void controllerOutOfTreeInit(void)
 {
-  controllerPidInit();
+  if (USE_PID) {
+    controllerPidInit();
+  }
+  else {
+    controllerBrescianiniInit();
+  }
 
   work.bounds = &bounds;
   work.socs = &socs;
@@ -228,11 +216,7 @@ void controllerOutOfTreeInit(void)
   /* End of task initialization */
 }
 
-bool controllerOutOfTreeTest()
-{
-  // Always return true
-  return true;
-}
+
 
 static void tinympcControllerTask(void *parameters)
 {
@@ -245,25 +229,56 @@ static void tinympcControllerTask(void *parameters)
 
   while (true)
   {
-    // Update task data with most recent stabilizer loop data
     xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
 
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
-    memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
-    memcpy(&state_task, &state_data, sizeof(state_t));
-    memcpy(&control_task, &control_data, sizeof(control_t));
-    xSemaphoreGive(dataMutex);
+    nowMs = T2M(xTaskGetTickCount());
+    if (nowMs >= nextMpcMs)
+    {
+      nextMpcMs = nowMs + (uint32_t)(1000.0 / MPC_RATE);
 
+      // Update task data with most recent stabilizer loop data
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      memcpy(&setpoint_task, &setpoint_data, sizeof(setpoint_t));
+      memcpy(&sensors_task, &sensors_data, sizeof(sensorData_t));
+      memcpy(&state_task, &state_data, sizeof(state_t));
+      memcpy(&control_task, &control_data, sizeof(control_t));
+      xSemaphoreGive(dataMutex);
 
-    //   mpc_setpoint_task = problem.x.col(NHORIZON-1);
-    // Copy the setpoint calculated by the task loop to the global mpc_setpoint
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
-    // memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
-    // memcpy(&init_vel_z, &problem.x.col(0)(8), sizeof(float));
-    xSemaphoreGive(dataMutex);
+      //// DO MPC HERE
+      // 1. Update measurement
+      work.x.col(0) = x0;
+
+      // 2. Update reference
+      for (int i = 0; i < NHORIZON; i++)
+      {
+          if (k + i >= NTOTAL)
+          {
+              work.Xref.col(i) = xg;
+          }
+          else
+          {
+              work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + k) / (NTOTAL);
+          }
+      }
+
+      // 3. Reset dual variables if needed
+
+      // 4. Solve MPC problem
+      // unsigned long start = micros();
+      tiny_solve(&solver);
+      // unsigned long end = micros();
+
+      mpc_setpoint_task = solver.work->x.col(1);
+
+      // Copy the setpoint calculated by the task loop to the global mpc_setpoint
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      memcpy(&mpc_setpoint, &mpc_setpoint_task, sizeof(tiny_VectorNx));
+      // memcpy(&init_vel_z, &problem.x.col(0)(8), sizeof(float));
+      xSemaphoreGive(dataMutex);
+    }
   }
 }
+
 
 /**
  * This function is called from the stabilizer loop. It is important that this call returns
@@ -272,25 +287,44 @@ static void tinympcControllerTask(void *parameters)
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick)
 {
   xSemaphoreTake(dataMutex, portMAX_DELAY);
-  memcpy(&setpoint_data, setpoint, sizeof(setpoint_t));
-  memcpy(&sensors_data, sensors, sizeof(sensorData_t));
-  memcpy(&state_data, state, sizeof(state_t));
 
   if (RATE_DO_EXECUTE(LOWLEVEL_RATE, tick))
   {
+    if (USE_PID) {
     mpc_setpoint_pid.mode.yaw = modeAbs;
     mpc_setpoint_pid.mode.x = modeAbs;
     mpc_setpoint_pid.mode.y = modeAbs;
     mpc_setpoint_pid.mode.z = modeAbs;
-    // mpc_setpoint_pid.position.x = mpc_setpoint(0);
-    // mpc_setpoint_pid.position.y = mpc_setpoint(1);
-    // mpc_setpoint_pid.position.z = mpc_setpoint(2);
-    mpc_setpoint_pid.position.x = 0.0;
-    mpc_setpoint_pid.position.y = 0.0;
-    mpc_setpoint_pid.position.z = 1.0;
+    mpc_setpoint_pid.position.x = mpc_setpoint(0);
+    mpc_setpoint_pid.position.y = mpc_setpoint(1);
+    mpc_setpoint_pid.position.z = mpc_setpoint(2);
+    // mpc_setpoint_pid.position.x = 0.0;
+    // mpc_setpoint_pid.position.y = 0.0;
+    // mpc_setpoint_pid.position.z = 1.0;
     mpc_setpoint_pid.attitude.yaw = 0.0;
-
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
+    }
+    else {
+    mpc_setpoint_pid.mode.yaw = modeAbs;
+    mpc_setpoint_pid.mode.x = modeAbs;
+    mpc_setpoint_pid.mode.y = modeAbs;
+    mpc_setpoint_pid.mode.z = modeAbs;
+    mpc_setpoint_pid.attitude.yaw = 0.0;
+    mpc_setpoint_pid.attitudeRate.yaw = 0.0;
+    mpc_setpoint_pid.position.x = 1234.0;  // magic number to tell Bres to use MPC
+    mpc_setpoint_pid.acceleration.x = mpc_setpoint(0);
+    mpc_setpoint_pid.acceleration.y = mpc_setpoint(1);
+    mpc_setpoint_pid.acceleration.z = mpc_setpoint(2);
+    controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
+    }
+
+    // Don't fly away
+    if (1) {
+      control->normalizedForces[0] = 0.0f;
+      control->normalizedForces[1] = 0.0f;
+      control->normalizedForces[2] = 0.0f;
+      control->normalizedForces[3] = 0.0f;
+    }
   }
 
   xSemaphoreGive(dataMutex);

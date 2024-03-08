@@ -169,6 +169,11 @@ void controllerBrescianini(control_t *control,
                               setpoint->velocity.y - state->velocity.y,
                               setpoint->velocity.z - state->velocity.z);
 
+    // a magic number to tell we are using tinympc for direct acceleration control so ignore these errors
+    if (setpoint->position.x == 1234.0)
+      pError = mkvec(0, 0, 0);
+      vError = mkvec(0, 0, 0);
+      setpoint->acceleration.z -= GRAVITY_MAGNITUDE;  // comp for gravity comp at #193
 
     // ====== LINEAR CONTROL ======
 
