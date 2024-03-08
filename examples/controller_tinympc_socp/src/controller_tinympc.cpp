@@ -48,10 +48,10 @@ extern "C"
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
 // #define RATE_25_HZ 25
-#define MPC_RATE RATE_50_HZ
-// #define MPC_RATE RATE_100_HZ
+// #define MPC_RATE RATE_50_HZ
+#define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
-#define USE_PID 0  // 1 for PID (state setpoint), 0 for Brescianini (accel setpoint)
+#define USE_PID 1  // 1 for PID (state setpoint), 0 for Brescianini (accel setpoint)
 
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -89,6 +89,11 @@ static TinyCache cache;
 static TinySettings settings;
 static TinySolver solver{&settings, &cache, &work};
 
+static tiny_VectorNu u_min_one_time_step(-10.0, -10.0, -10.0);
+static tiny_VectorNu u_max_one_time_step(105.0, 105.0, 105.0);
+static tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
+static tiny_VectorNx x_max_one_time_step(5.0, 5.0, 100.0, 10.0, 10.0, 20.0);
+
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
 static tiny_VectorNu u_lqr;
@@ -98,10 +103,13 @@ static tiny_VectorNx xg;
 static tiny_VectorNx x0;
 
 // Helper variables
-static bool enable_traj = false;
-static int traj_index = 0;
-static int max_traj_index = 0;
-static int mpc_steps_taken = 0;
+static int8_t result = 0;
+static uint32_t step = 0;         // mpc steps taken
+static bool en_traj = true;
+static int8_t user_traj_iter = 1; // number of times to execute full trajectory
+static int8_t traj_hold = 3;      // hold current trajectory for this no of steps
+static int8_t traj_iter = 0;      // number of times trajectory has been executed 
+static uint32_t traj_idx = 0;     // actual traj index in the trajectory
 static uint64_t startTimestamp;
 static uint32_t timestamp;
 static uint32_t mpc_start_timestamp;
@@ -157,12 +165,9 @@ void controllerOutOfTreeInit(void)
   work.R = Eigen::Map<tiny_VectorNu>(R_data);
 
   //////// Box constraints
-  tiny_VectorNu u_min_one_time_step(-10.0, -10.0, -10.0);
-  tiny_VectorNu u_max_one_time_step(105.0, 105.0, 105.0);
+
   work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON - 1);
   work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON - 1);
-  tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
-  tiny_VectorNx x_max_one_time_step(5.0, 5.0, 100.0, 10.0, 10.0, 20.0);
   work.bounds->x_min = x_min_one_time_step.replicate(1, NHORIZON);
   work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
@@ -177,7 +182,7 @@ void controllerOutOfTreeInit(void)
   //////// Settings
   settings.abs_pri_tol = 0.01;
   settings.abs_dua_tol = 0.01;
-  settings.max_iter = 10;
+  settings.max_iter = 2;
   settings.check_termination = 1;
   settings.en_state_bound = 0;
   settings.en_input_bound = 1;
@@ -198,11 +203,11 @@ void controllerOutOfTreeInit(void)
   {
     work.Uref.col(i)(2) = 10;
   }
-  for (int i = 0; i < NHORIZON; i++)
-  {
-    work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i) / (NTOTAL);
-  }
-
+  // for (int i = 0; i < NHORIZON; i++)
+  // {
+  //   work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i) / (NTOTAL);
+  // }
+  // tiny_solve(&solver);
 
   /* Begin task initialization */
   runTaskSemaphore = xSemaphoreCreateBinary();
@@ -216,6 +221,21 @@ void controllerOutOfTreeInit(void)
   /* End of task initialization */
 }
 
+
+void updateHorizonReference(const setpoint_t *setpoint) {
+  traj_idx++;
+  for (int i = 0; i < NHORIZON; i++)
+  {
+    if (traj_idx + i >= NTOTAL)
+    {
+        work.Xref.col(i) = xg;
+    }
+    else
+    {
+        work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + traj_idx) / (NTOTAL);
+    }
+  }
+}
 
 
 static void tinympcControllerTask(void *parameters)
@@ -249,17 +269,7 @@ static void tinympcControllerTask(void *parameters)
       work.x.col(0) = x0;
 
       // 2. Update reference
-      for (int i = 0; i < NHORIZON; i++)
-      {
-          if (k + i >= NTOTAL)
-          {
-              work.Xref.col(i) = xg;
-          }
-          else
-          {
-              work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + k) / (NTOTAL);
-          }
-      }
+      updateHorizonReference(&setpoint_task);
 
       // 3. Reset dual variables if needed
 

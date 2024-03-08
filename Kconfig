@@ -13,7 +13,7 @@ config CROSS_COMPILE
 
 config DEBUG
     bool "Enable debug build"
-    default y
+    default n
     help
         Enable debug symbols and extra output from firmware.
 

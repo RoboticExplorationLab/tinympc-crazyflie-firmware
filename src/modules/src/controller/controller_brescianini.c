@@ -173,7 +173,6 @@ void controllerBrescianini(control_t *control,
     if (setpoint->position.x == 1234.0)
       pError = mkvec(0, 0, 0);
       vError = mkvec(0, 0, 0);
-      setpoint->acceleration.z -= GRAVITY_MAGNITUDE;  // comp for gravity comp at #193
 
     // ====== LINEAR CONTROL ======
 
@@ -194,6 +193,9 @@ void controllerBrescianini(control_t *control,
     accDes.z += 1.0f / tau_z / tau_z * pError.z;
     accDes.z += 2.0f * zeta_z / tau_z * vError.z;
     accDes.z += setpoint->acceleration.z;
+    if (setpoint->position.x == 1234.0) {
+      accDes.z -= GRAVITY_MAGNITUDE;  // comp for gravity comp at #192
+    }
     accDes.z = constrain(accDes.z, -coll_max, coll_max);
 
 
