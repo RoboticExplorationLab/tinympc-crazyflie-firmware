@@ -2,9 +2,9 @@
 
 #include <tinympc/types.hpp>
 
-static tinytype rho_value = 1.0;
+static const tinytype rho_value = 1.0;
 
-static tinytype Adyn_data[NSTATES*NSTATES]  = {
+static const tinytype Adyn_data[NSTATES*NSTATES]  = {
 	1.000000f, 0.000000f, 0.000000f, 0.050000f, 0.000000f, 0.000000f, 
 	0.000000f, 1.000000f, 0.000000f, 0.000000f, 0.050000f, 0.000000f, 
 	0.000000f, 0.000000f, 1.000000f, 0.000000f, 0.000000f, 0.050000f, 
@@ -13,7 +13,7 @@ static tinytype Adyn_data[NSTATES*NSTATES]  = {
 	0.000000f, 0.000000f, 0.000000f, 0.000000f, 0.000000f, 1.000000f
 };
 
-static tinytype Bdyn_data[NSTATES*NINPUTS]  = {
+static const tinytype Bdyn_data[NSTATES*NINPUTS]  = {
 	0.001250f, 0.000000f, 0.000000f, 
 	0.000000f, 0.001250f, 0.000000f, 
 	0.000000f, 0.000000f, 0.001250f, 
@@ -22,19 +22,19 @@ static tinytype Bdyn_data[NSTATES*NINPUTS]  = {
 	0.000000f, 0.000000f, 0.050000f
 };
 
-static tinytype fdyn_data[NSTATES]  = {0.000000f, 0.000000f, -0.012263f, 0.000000f, 0.000000f, -0.490500f};
+static const tinytype fdyn_data[NSTATES]  = {0.000000f, 0.000000f, -0.012263f, 0.000000f, 0.000000f, -0.490500f};
 
-static tinytype Q_data[NSTATES] = {101.000000f, 101.000000f, 101.000000f, 101.000000f, 101.000000f, 101.000000f};
+static const tinytype Q_data[NSTATES] = {101.000000f, 101.000000f, 101.000000f, 101.000000f, 101.000000f, 101.000000f};
 
-static tinytype R_data[NINPUTS] = {2.000000f, 2.000000f, 2.000000f};
+static const tinytype R_data[NINPUTS] = {2.000000f, 2.000000f, 2.000000f};
 
-static tinytype Kinf_data[NINPUTS*NSTATES]  = {
+static const tinytype Kinf_data[NINPUTS*NSTATES]  = {
 	5.817212f, 0.000000f, 0.000000f, 6.743469f, 0.000000f, 0.000000f, 
 	0.000000f, 5.817212f, 0.000000f, 0.000000f, 6.743469f, 0.000000f, 
 	0.000000f, 0.000000f, 5.817212f, 0.000000f, 0.000000f, 6.743469f
 };
 
-static tinytype Pinf_data[NSTATES*NSTATES]  = {
+static const tinytype Pinf_data[NSTATES*NSTATES]  = {
 	2341.638617f, 0.000000f, 0.000000f, 288.704434f, 0.000000f, 0.000000f, 
 	0.000000f, 2341.638617f, 0.000000f, 0.000000f, 288.704434f, 0.000000f, 
 	0.000000f, 0.000000f, 2341.638617f, 0.000000f, 0.000000f, 288.704434f, 
@@ -43,13 +43,13 @@ static tinytype Pinf_data[NSTATES*NSTATES]  = {
 	0.000000f, 0.000000f, 288.704434f, 0.000000f, 0.000000f, 377.956375f
 };
 
-static tinytype Quu_inv_data[NINPUTS*NINPUTS]  = {
+static const tinytype Quu_inv_data[NINPUTS*NINPUTS]  = {
 	0.335049f, 0.000000f, 0.000000f, 
 	0.000000f, 0.335049f, 0.000000f, 
 	0.000000f, 0.000000f, 0.335049f
 };
 
-static tinytype AmBKt_data[NSTATES*NSTATES]  = {
+static const tinytype AmBKt_data[NSTATES*NSTATES]  = {
 	0.992728f, 0.000000f, 0.000000f, -0.290861f, 0.000000f, 0.000000f, 
 	0.000000f, 0.992728f, 0.000000f, 0.000000f, -0.290861f, 0.000000f, 
 	0.000000f, 0.000000f, 0.992728f, 0.000000f, 0.000000f, -0.290861f, 
@@ -58,7 +58,7 @@ static tinytype AmBKt_data[NSTATES*NSTATES]  = {
 	0.000000f, 0.000000f, 0.041571f, 0.000000f, 0.000000f, 0.662827f
 };
 
-static tinytype APf_data[NSTATES]  = {0.000000f, 0.000000f, -114.133694f, 0.000000f, 0.000000f, -132.306864f};
+static const tinytype APf_data[NSTATES]  = {0.000000f, 0.000000f, -114.133694f, 0.000000f, 0.000000f, -132.306864f};
 
-static tinytype BPf_data[NINPUTS]  = {0.000000f, 0.000000f, -9.659297f};
+static const tinytype BPf_data[NINPUTS]  = {0.000000f, 0.000000f, -9.659297f};
 

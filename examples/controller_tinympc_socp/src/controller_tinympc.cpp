@@ -42,14 +42,14 @@ extern "C"
 // #include "quadrotor_100hz_ref_hover.hpp"
 
 // Edit the debug name to get nice debug prints
-#define DEBUG_MODULE "MPCTASK"
+#define DEBUG_MODULE "MPC"
 #include "debug.h"
 
 
 // #define MPC_RATE RATE_250_HZ  // control frequency
 // #define RATE_25_HZ 25
-// #define MPC_RATE RATE_50_HZ
-#define MPC_RATE RATE_100_HZ
+#define MPC_RATE RATE_50_HZ
+// #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define USE_PID 1  // 1 for PID (state setpoint), 0 for Brescianini (accel setpoint)
 
@@ -89,10 +89,10 @@ static TinyCache cache;
 static TinySettings settings;
 static TinySolver solver{&settings, &cache, &work};
 
-static tiny_VectorNu u_min_one_time_step(-10.0, -10.0, -10.0);
-static tiny_VectorNu u_max_one_time_step(105.0, 105.0, 105.0);
-static tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
-static tiny_VectorNx x_max_one_time_step(5.0, 5.0, 100.0, 10.0, 10.0, 20.0);
+// static float u_min_data[] = {-10.0, -10.0, -10.0};
+// static float u_max_data[] = {105, 105, 105};
+// static float x_min_data[] = {-5.0, -5.0, -0.5, -10.0, -10.0, -20.0};
+// static float x_max_data[] = {5.0, 5.0, 0.5, 10.0, 10.0, 20.0};
 
 static tiny_MatrixNxNh problem_x;
 static float horizon_nh_z;
@@ -124,7 +124,7 @@ void appMain()
 
   while (1)
   {
-    vTaskDelay(M2T(2000));  //TODO: Can I make this really big?
+    vTaskDelay(M2T(10000));  //TODO: Can I make this really big?
   }
 }
 bool controllerOutOfTreeTest()
@@ -150,24 +150,27 @@ void controllerOutOfTreeInit(void)
 
   //////// Cache
   cache.rho = rho_value;
-  cache.Kinf = Eigen::Map<Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_data);
-  cache.Pinf = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_data);
-  cache.Quu_inv = Eigen::Map<Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_data);
-  cache.AmBKt = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_data);
-  cache.APf = Eigen::Map<Matrix<tinytype, NSTATES, 1>>(APf_data);
-  cache.BPf = Eigen::Map<Matrix<tinytype, NINPUTS, 1>>(BPf_data);
+  cache.Kinf = Eigen::Map<const Matrix<tinytype, NINPUTS, NSTATES, Eigen::RowMajor>>(Kinf_data);
+  cache.Pinf = Eigen::Map<const Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Pinf_data);
+  cache.Quu_inv = Eigen::Map<const Matrix<tinytype, NINPUTS, NINPUTS, Eigen::RowMajor>>(Quu_inv_data);
+  cache.AmBKt = Eigen::Map<const Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(AmBKt_data);
+  cache.APf = Eigen::Map<const Matrix<tinytype, NSTATES, 1>>(APf_data);
+  cache.BPf = Eigen::Map<const Matrix<tinytype, NINPUTS, 1>>(BPf_data);
 
   //////// Workspace (dynamics and LQR cost matrices)
-  work.Adyn = Eigen::Map<Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
-  work.Bdyn = Eigen::Map<Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
-  work.fdyn = Eigen::Map<Matrix<tinytype, NSTATES, 1>>(fdyn_data);
-  work.Q = Eigen::Map<tiny_VectorNx>(Q_data);
-  work.R = Eigen::Map<tiny_VectorNu>(R_data);
+  work.Adyn = Eigen::Map<const Matrix<tinytype, NSTATES, NSTATES, Eigen::RowMajor>>(Adyn_data);
+  work.Bdyn = Eigen::Map<const Matrix<tinytype, NSTATES, NINPUTS, Eigen::RowMajor>>(Bdyn_data);
+  work.fdyn = Eigen::Map<const Matrix<tinytype, NSTATES, 1>>(fdyn_data);
+  work.Q = Eigen::Map<const tiny_VectorNx>(Q_data);
+  work.R = Eigen::Map<const tiny_VectorNu>(R_data);
 
   //////// Box constraints
-
-  work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON - 1);
-  work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON - 1);
+  tiny_VectorNu u_min_one_time_step(-10.0, -10.0, -10.0);
+  tiny_VectorNu u_max_one_time_step(105.0, 105.0, 105.0);
+  work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON-1);
+  work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON-1);
+  tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
+  tiny_VectorNx x_max_one_time_step(5.0, 5.0, 100.0, 10.0, 10.0, 20.0);
   work.bounds->x_min = x_min_one_time_step.replicate(1, NHORIZON);
   work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
@@ -182,7 +185,7 @@ void controllerOutOfTreeInit(void)
   //////// Settings
   settings.abs_pri_tol = 0.01;
   settings.abs_dua_tol = 0.01;
-  settings.max_iter = 2;
+  settings.max_iter = 5;
   settings.check_termination = 1;
   settings.en_state_bound = 0;
   settings.en_input_bound = 1;
@@ -194,20 +197,15 @@ void controllerOutOfTreeInit(void)
 
   // Initial state
   // xinit << 4, 2, 20, -3, 2, -4.5;
-  xinit << 0, 0, 1, 0, 0, 0.0;
-  xg << 0, 1, 1, 0, 0, 0.0;
-  x0 = xinit * 1.1;
+  xinit << 0, 0, 0.5, 0, 0, 0.0;
+  xg << 0, 0, 1.0, 0, 0, 0.0;
+  x0 = xinit * 1.0;
 
   // Uref stays constant, Xref interpolate between start and goal states
   for (int i = 0; i < NHORIZON - 1; i++)
   {
-    work.Uref.col(i)(2) = 10;
+    work.Uref.col(i)(2) = GRAVITY_MAGNITUDE*10;
   }
-  // for (int i = 0; i < NHORIZON; i++)
-  // {
-  //   work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i) / (NTOTAL);
-  // }
-  // tiny_solve(&solver);
 
   /* Begin task initialization */
   runTaskSemaphore = xSemaphoreCreateBinary();
@@ -228,11 +226,12 @@ void updateHorizonReference(const setpoint_t *setpoint) {
   {
     if (traj_idx + i >= NTOTAL)
     {
-        work.Xref.col(i) = xg;
+      work.Xref.col(i) = xg;
     }
     else
     {
-        work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + traj_idx) / (NTOTAL);
+      // work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + traj_idx) / (NTOTAL);
+      work.Xref.col(i) = xg;
     }
   }
 }
@@ -266,19 +265,31 @@ static void tinympcControllerTask(void *parameters)
 
       //// DO MPC HERE
       // 1. Update measurement
-      work.x.col(0) = x0;
+      work.x.col(0) << state_task.position.x, state_task.position.y, state_task.position.z, state_task.velocity.x, state_task.velocity.y, state_task.velocity.z;
+      // work.x.col(0) = x0;
 
       // 2. Update reference
       updateHorizonReference(&setpoint_task);
 
       // 3. Reset dual variables if needed
+      reset_dual(&solver);
 
       // 4. Solve MPC problem
-      // unsigned long start = micros();
+      mpc_start_timestamp = usecTimestamp();
       tiny_solve(&solver);
-      // unsigned long end = micros();
+      vTaskDelay(M2T(1));
+      tiny_solve(&solver);
+      mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000;
+      // DEBUG_PRINT("t: %lu\n", mpc_time_us);
+
+      // DEBUG_PRINT("u: %.2f %.2f %.2f\n", solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2));
+
+      // float err = (solver.work->x.col(0) - solver.work->Xref.col(0)).norm();
+
+      // DEBUG_PRINT("e: %.2f\n", err);
 
       mpc_setpoint_task = solver.work->x.col(1);
+      // mpc_setpoint_task << 0, 0, 0.8, 0, 0, 0;
 
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
       xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -296,10 +307,13 @@ static void tinympcControllerTask(void *parameters)
  */
 void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const sensorData_t *sensors, const state_t *state, const uint32_t tick)
 {
-  xSemaphoreTake(dataMutex, portMAX_DELAY);
-
   if (RATE_DO_EXECUTE(LOWLEVEL_RATE, tick))
   {
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    memcpy(&setpoint_data, setpoint, sizeof(setpoint_t));
+    memcpy(&sensors_data, sensors, sizeof(sensorData_t));
+    memcpy(&state_data, state, sizeof(state_t));
+
     if (USE_PID) {
     mpc_setpoint_pid.mode.yaw = modeAbs;
     mpc_setpoint_pid.mode.x = modeAbs;
@@ -310,7 +324,7 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.position.z = mpc_setpoint(2);
     // mpc_setpoint_pid.position.x = 0.0;
     // mpc_setpoint_pid.position.y = 0.0;
-    // mpc_setpoint_pid.position.z = 1.0;
+    // mpc_setpoint_pid.position.z = 0.5;
     mpc_setpoint_pid.attitude.yaw = 0.0;
     controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
     }
@@ -329,15 +343,15 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     }
 
     // Don't fly away
-    if (1) {
+    if (0) {
       control->normalizedForces[0] = 0.0f;
       control->normalizedForces[1] = 0.0f;
       control->normalizedForces[2] = 0.0f;
       control->normalizedForces[3] = 0.0f;
     }
-  }
 
-  xSemaphoreGive(dataMutex);
+    xSemaphoreGive(dataMutex);
+  }
 
   // Allows mpc task to run again
   xSemaphoreGive(runTaskSemaphore);

@@ -177,7 +177,7 @@ config DECK_FLAPPER_EXTRX_ENABLE
 
 config DECK_FLOW
     bool "Support the Flow (v1 and v2) deck"
-    default n
+    default y
     select ESTIMATOR_KALMAN_ENABLE
     select DECK_ZRANGER
     select DECK_ZRANGER2

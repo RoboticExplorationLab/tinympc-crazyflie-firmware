@@ -297,6 +297,7 @@ extern "C"
     {
         // Initialize variables
         solver->work->status = 11; // TINY_UNSOLVED
+        solver->work->iter = 0;
 
         for (int i = 0; i < solver->settings->max_iter; i++)
         {
