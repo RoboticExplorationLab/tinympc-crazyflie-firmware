@@ -38,6 +38,7 @@
 #include "num.h"
 #include "math3d.h"
 #include "physicalConstants.h"
+#include "platform_defaults.h"
 
 static struct mat33 CRAZYFLIE_INERTIA =
     {{{16.6e-6f, 0.83e-6f, 0.72e-6f},
@@ -64,7 +65,7 @@ static float tau_rp_rate = 0.015;
 static float tau_yaw_rate = 0.0075;
 
 // minimum and maximum thrusts
-static float coll_min = 1;  // in Gs?
+static float coll_min = 1;
 static float coll_max = 18;
 // if too much thrust is commanded, which axis is reduced to meet maximum thrust?
 // 1 -> even reduction across x, y, z
@@ -72,7 +73,7 @@ static float coll_max = 18;
 static float thrust_reduction_fairness = 0.25;
 
 // minimum and maximum body rates
-static float omega_rp_max = 30;  // in rad/s
+static float omega_rp_max = 30;
 static float omega_yaw_max = 10;
 static float heuristic_rp = 12;
 static float heuristic_yaw = 5;
@@ -97,7 +98,7 @@ void controllerBrescianini(control_t *control,
                                  const setpoint_t *setpoint,
                                  const sensorData_t *sensors,
                                  const state_t *state,
-                                 const uint32_t tick) {
+                                 const uint32_t stabilizerStep) {
 
   static float control_omega[3];
   static struct vec control_torque;
@@ -109,7 +110,7 @@ void controllerBrescianini(control_t *control,
   omega[1] = radians(sensors->gyro.y);
   omega[2] = radians(sensors->gyro.z);
 
-  if (RATE_DO_EXECUTE(UPDATE_RATE, tick)) {
+  if (RATE_DO_EXECUTE(UPDATE_RATE, stabilizerStep)) {
     // desired accelerations
     struct vec accDes = vzero();
     // desired thrust
@@ -150,7 +151,6 @@ void controllerBrescianini(control_t *control,
     // R[2][2] = q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z;
 
     // We don't need all terms of R, only compute the necessary parts
-    // projections of e3_B to Ixyz
 
     float R02 = 2 * attitude.x * attitude.z + 2 * attitude.w * attitude.y;
     float R12 = 2 * attitude.y * attitude.z - 2 * attitude.w * attitude.x;
@@ -160,7 +160,7 @@ void controllerBrescianini(control_t *control,
     struct quat temp1 = qeye();
     struct quat temp2 = qeye();
 
-    // compute the position and (body) velocity errors
+    // compute the position and velocity errors
     struct vec pError = mkvec(setpoint->position.x - state->position.x,
                               setpoint->position.y - state->position.y,
                               setpoint->position.z - state->position.z);
@@ -169,10 +169,10 @@ void controllerBrescianini(control_t *control,
                               setpoint->velocity.y - state->velocity.y,
                               setpoint->velocity.z - state->velocity.z);
 
-    // a magic number to tell we are using tinympc for direct acceleration control so ignore these errors
-    if (setpoint->position.x == 1234.0)
-      pError = mkvec(0, 0, 0);
-      vError = mkvec(0, 0, 0);
+    if (setpoint->position.x == 1234.0) {
+      pError = vzero();
+      vError = vzero();
+    }
 
     // ====== LINEAR CONTROL ======
 
@@ -180,7 +180,7 @@ void controllerBrescianini(control_t *control,
     accDes.x = 0;
     accDes.x += 1.0f / tau_xy / tau_xy * pError.x;
     accDes.x += 2.0f * zeta_xy / tau_xy * vError.x;
-    accDes.x += setpoint->acceleration.x;  // m/s^2
+    accDes.x += setpoint->acceleration.x;
     accDes.x = constrain(accDes.x, -coll_max, coll_max);
 
     accDes.y = 0;
@@ -189,12 +189,12 @@ void controllerBrescianini(control_t *control,
     accDes.y += setpoint->acceleration.y;
     accDes.y = constrain(accDes.y, -coll_max, coll_max);
 
-    accDes.z = GRAVITY_MAGNITUDE;  // compensate gravity
+    accDes.z = GRAVITY_MAGNITUDE;
     accDes.z += 1.0f / tau_z / tau_z * pError.z;
     accDes.z += 2.0f * zeta_z / tau_z * vError.z;
     accDes.z += setpoint->acceleration.z;
     if (setpoint->position.x == 1234.0) {
-      accDes.z -= GRAVITY_MAGNITUDE;  // comp for gravity comp at #192
+      accDes.z -= GRAVITY_MAGNITUDE;
     }
     accDes.z = constrain(accDes.z, -coll_max, coll_max);
 
@@ -202,7 +202,7 @@ void controllerBrescianini(control_t *control,
     // ====== THRUST CONTROL ======
 
     // compute commanded thrust required to achieve the z acceleration
-    collCmd = accDes.z / R22;  // eq.(44)
+    collCmd = accDes.z / R22;
 
     if (fabsf(collCmd) > coll_max) {
       // exceeding the thrust threshold
@@ -244,7 +244,7 @@ void controllerBrescianini(control_t *control,
     // a unit vector pointing in the direction of the desired thrust (ie. the direction of body's z axis in the inertial frame)
     struct vec zI_des = vnormalize(accDes);
 
-    // a unit vector pointing in the direction of the current thrust (in I frame)
+    // a unit vector pointing in the direction of the current thrust
     struct vec zI_cur = vnormalize(mkvec(R02, R12, R22));
 
     // a unit vector pointing in the direction of the inertial frame z-axis
@@ -287,7 +287,7 @@ void controllerBrescianini(control_t *control,
 
     // ====== FULL ATTITUDE CONTROL ======
 
-    // compute the error angle between the inertial and the desired thrust directions 
+    // compute the error angle between the inertial and the desired thrust directions
     dotProd = vdot(zI, zI_des);
     dotProd = constrain(dotProd, -1, 1);
     alpha = acosf(dotProd);
@@ -371,8 +371,7 @@ void controllerBrescianini(control_t *control,
     }
 
     if (control_omega[2] * omega[2] < 0 && fabsf(omega[2]) > heuristic_yaw) { // desired rotational rate in direction opposite to current rotational rate
-      control_omega[2] = omega_yaw_max * (omega[2] < 0 ? -1 : 1);
-      // control_omega[2] = omega_rp_max * (omega[2] < 0 ? -1 : 1); // maximum rotational rate in direction of current rotation
+      control_omega[2] = omega_rp_max * (omega[2] < 0 ? -1 : 1); // maximum rotational rate in direction of current rotation
     }
 
     // scale the commands to satisfy rate constraints
@@ -383,8 +382,8 @@ void controllerBrescianini(control_t *control,
 
     control_omega[0] /= scaling;
     control_omega[1] /= scaling;
-    control_omega[2] /= scaling;  // rad/s
-    control_thrust = collCmd;  // m/s^2
+    control_omega[2] /= scaling;
+    control_thrust = collCmd;
   }
 
   if (setpoint->mode.z == modeDisable) {
@@ -401,7 +400,6 @@ void controllerBrescianini(control_t *control,
     // update the commanded body torques based on the current error in body rates
     control_torque = mvmul(CRAZYFLIE_INERTIA, omegaErr);
 
-    // control->thrustSi = control_thrust * 0.033; // force to provide control_thrust
     control->thrustSi = control_thrust * CF_MASS; // force to provide control_thrust
     control->torqueX = control_torque.x;
     control->torqueY = control_torque.y;

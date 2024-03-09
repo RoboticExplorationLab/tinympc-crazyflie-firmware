@@ -2,7 +2,7 @@
 
 #include "admm.hpp"
 
-#define DEBUG_MODULE "TINYALG"
+// #define DEBUG_MODULE "TINYALG"
 
 extern "C"
 {
