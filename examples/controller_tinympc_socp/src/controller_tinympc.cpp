@@ -36,6 +36,7 @@ extern "C"
 
 // Params
 #include "quadrotor_50hz_Q1e2.hpp"
+// #include "quadrotor_20hz_Q1e2_1e1.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPC"
@@ -47,7 +48,7 @@ extern "C"
 // #define MPC_RATE      RATE_50_HZ
 #define MPC_RATE      RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
-#define USE_PID 1  // 1 for PID (state setpoint), 0 for Brescianini (accel setpoint)
+#define TRACK_MODE 2  // 0 for position, 1 for velocity, 2 for acceleration
 
 
 // Semaphore to signal that we got data from the stabilizer loop to process
@@ -148,13 +149,8 @@ void updateHorizonReference(const setpoint_t *setpoint) {
 
 void controllerOutOfTreeInit(void)
 {
-  if (USE_PID) {
-    // controllerPidInit();
-    controllerBrescianiniInit();
-  }
-  else {
-    controllerBrescianiniInit();
-  }
+  // controllerPidInit();
+  controllerBrescianiniInit();
 
   work.bounds = &bounds;
   work.socs = &socs;
@@ -179,7 +175,7 @@ void controllerOutOfTreeInit(void)
 
   //////// Box constraints
   tiny_VectorNu u_min_one_time_step(-10, -10, 0.0);
-  tiny_VectorNu u_max_one_time_step(10, 10, 18);
+  tiny_VectorNu u_max_one_time_step(10, 10, 15);
   work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON-1);
   work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON-1);
   // tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
@@ -188,7 +184,7 @@ void controllerOutOfTreeInit(void)
   // work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
   //////// Second order cone constraints
-  work.socs->cu[0] = 0.3; // coefficients for input cones (mu)
+  work.socs->cu[0] = 0.9; // coefficients for input cones (mu)
   work.socs->cx[0] = 0.6;  // coefficients for state cones (mu)
   // work.socs->Acu[0] = 0; // start indices for input cones
   // work.socs->Acx[0] = 0; // start indices for state cones
@@ -198,12 +194,12 @@ void controllerOutOfTreeInit(void)
   //////// Settings
   settings.abs_pri_tol = 0.01;
   settings.abs_dua_tol = 0.01;
-  settings.max_iter = 10;
-  settings.check_termination = 1;
+  settings.max_iter = 2;
+  // settings.check_termination = 0;
   // settings.en_state_bound = 0;
   settings.en_input_bound = 1;
   // settings.en_state_soc = 0;
-  settings.en_input_soc = 0;
+  settings.en_input_soc = 1;
 
   //////// Initialize other workspace values automatically
   // reset_problem(&solver);
@@ -211,7 +207,7 @@ void controllerOutOfTreeInit(void)
   // Initial state
   // xinit << 4, 2, 20, -3, 2, -4.5;
   xinit << 0, 0, 0.5, 0, 0, 0.0;
-  xg << 1.0, 0, 0.5, 0, 0, 0.0;
+  xg << 0.0, 0, 0.5, 0, 0, 0.0;
   x0 = xinit * 1.0;
   mpc_setpoint_task << xg;
 
@@ -270,17 +266,24 @@ static void tinympcControllerTask(void *parameters)
       updateHorizonReference(&setpoint_task);
 
       // 3. Reset dual variables if needed
-      reset_dual(&solver);
+      // reset_dual(&solver);
 
       // 4. Solve MPC problem
       mpc_start_timestamp = usecTimestamp();
       tiny_solve(&solver);
       vTaskDelay(M2T(1));
       tiny_solve(&solver);
+      vTaskDelay(M2T(1));
+      tiny_solve(&solver);
 
       // 5. Extract control from solution
-      mpc_setpoint_task = solver.work->x.col(NHORIZON/2);
-      // mpc_setpoint_task << solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2), 0, 0, 0;
+      if (TRACK_MODE == 0 || TRACK_MODE == 1) {
+        mpc_setpoint_task = solver.work->x.col(NHORIZON/2);
+      }
+      if (TRACK_MODE == 2) {
+        mpc_setpoint_task << solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2), 0, 0, 0;
+        // mpc_setpoint_task << solver.work->socs->zc[0].col(0)(0), solver.work->socs->zc[0].col(0)(1), solver.work->socs->zc[0].col(0)(2), 0, 0, 0;
+      }
       // mpc_setpoint_task << 0, 0, 0.8, 0, 0, 0;
 
       if (0) {
@@ -322,42 +325,40 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     memcpy(&sensors_data, sensors, sizeof(sensorData_t));
     memcpy(&state_data, state, sizeof(state_t));
 
-    if (USE_PID) {
     mpc_setpoint_pid.mode.yaw = modeAbs;
     mpc_setpoint_pid.mode.x = modeAbs;
     mpc_setpoint_pid.mode.y = modeAbs;
     mpc_setpoint_pid.mode.z = modeAbs;
-    mpc_setpoint_pid.position.x = mpc_setpoint(0);
-    mpc_setpoint_pid.position.y = mpc_setpoint(1);
-    mpc_setpoint_pid.position.z = mpc_setpoint(2);
-    // mpc_setpoint_pid.position.x = 0.0;
-    // mpc_setpoint_pid.position.y = 0.0;
-    // mpc_setpoint_pid.position.z = 0.5;
     mpc_setpoint_pid.attitude.yaw = 0.0;
     mpc_setpoint_pid.attitudeRate.yaw = 0.0;
-    // controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
-    controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
+
+    if (TRACK_MODE == 0) {
+      mpc_setpoint_pid.position.x = mpc_setpoint(0);
+      mpc_setpoint_pid.position.y = mpc_setpoint(1);
+      mpc_setpoint_pid.position.z = mpc_setpoint(2);
+      // controllerPid(control, &mpc_setpoint_pid, sensors, state, tick);
+      controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
     }
-    else {
-    mpc_setpoint_pid.mode.yaw = modeAbs;
-    mpc_setpoint_pid.mode.x = modeAbs;
-    mpc_setpoint_pid.mode.y = modeAbs;
-    mpc_setpoint_pid.mode.z = modeAbs;
-    mpc_setpoint_pid.attitude.yaw = 0.0;
-    mpc_setpoint_pid.attitudeRate.yaw = 0.0;
-    mpc_setpoint_pid.position.x = 1234.0;  // magic number to tell Bres to use MPC
-    mpc_setpoint_pid.acceleration.x = mpc_setpoint(0);
-    mpc_setpoint_pid.acceleration.y = mpc_setpoint(1);
-    mpc_setpoint_pid.acceleration.z = mpc_setpoint(2);
-    controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
-      if (0 && RATE_DO_EXECUTE(10, tick)) {
+    if (TRACK_MODE == 1) {
+      mpc_setpoint_pid.position.x = 12341.0;
+      mpc_setpoint_pid.velocity.x = mpc_setpoint(3);
+      mpc_setpoint_pid.velocity.y = mpc_setpoint(4);
+      mpc_setpoint_pid.velocity.z = mpc_setpoint(5);
+      controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
+    }
+    if (TRACK_MODE == 2) {
+      mpc_setpoint_pid.position.x = 12342.0;
+      mpc_setpoint_pid.acceleration.x = mpc_setpoint(0);
+      mpc_setpoint_pid.acceleration.y = mpc_setpoint(1);
+      mpc_setpoint_pid.acceleration.z = mpc_setpoint(2);
+      controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
+      if (1 && RATE_DO_EXECUTE(10, tick)) {
         struct vec pError = mkvec(solver.work->x.col(0)(0) - solver.work->Xref.col(0)(0), 
                                   solver.work->x.col(0)(1) - solver.work->Xref.col(0)(1), 
                                   solver.work->x.col(0)(2) - solver.work->Xref.col(0)(2));
-        DEBUG_PRINT("e: %f %f %f\n", pError.x, pError.y, pError.z);
+        DEBUG_PRINT("e: %.2f %.2f %.2f\n", pError.x, pError.y, pError.z);
       }
     }
-
     // Don't fly away
     if (0) {
       control->normalizedForces[0] = 0.0f;

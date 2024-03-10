@@ -174,11 +174,11 @@ void controllerBrescianini(control_t *control,
                               setpoint->velocity.y - state->velocity.y,
                               setpoint->velocity.z - state->velocity.z);
 
-    if (setpoint->position.x == 1234.0) {  // track acceleration
+    if (setpoint->position.x == 12342.0) {  // track acceleration
       pError = vzero();
       vError = vzero();
     }
-    if (setpoint->position.x == 2234.0) {  // track velocity
+    if (setpoint->position.x == 12341.0) {  // track velocity
       pError = vzero();
     }
 
@@ -201,14 +201,14 @@ void controllerBrescianini(control_t *control,
     accDes.z += 1.0f / tau_z / tau_z * pError.z;
     accDes.z += 2.0f * zeta_z / tau_z * vError.z;
     accDes.z += setpoint->acceleration.z;
-    if (setpoint->position.x == 1234.0) {
+    if (setpoint->position.x == 12342.0) {
       accDes.z -= GRAVITY_MAGNITUDE;
     }
     accDes.z = constrain(accDes.z, -coll_max, coll_max);
 
-    if (0 && RATE_DO_EXECUTE(10, stabilizerStep)) {
+    if (1 && RATE_DO_EXECUTE(10, stabilizerStep)) {
       // DEBUG_PRINT("e: %f %f %f\n", pError.x, pError.y, pError.z);
-      DEBUG_PRINT("a: %f %f %f\n", accDes.x, accDes.y, accDes.z);
+      DEBUG_PRINT("a: %.2f %.2f %.2f\n", accDes.x, accDes.y, accDes.z);
     }
 
     // ====== THRUST CONTROL ======
