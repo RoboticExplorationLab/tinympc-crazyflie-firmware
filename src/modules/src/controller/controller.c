@@ -11,6 +11,7 @@
 
 #define DEFAULT_CONTROLLER ControllerTypePID
 // #define DEFAULT_CONTROLLER ControllerTypeOot
+// #define DEFAULT_CONTROLLER ControllerTypeBrescianini
 static ControllerType currentController = ControllerTypeAutoSelect;
 
 static void initController();

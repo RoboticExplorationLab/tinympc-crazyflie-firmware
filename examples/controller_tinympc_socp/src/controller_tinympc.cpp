@@ -35,11 +35,7 @@ extern "C"
 #include "controller_brescianini.h"
 
 // Params
-#include "quadrotor_20hz_params.hpp"
-// #include "rocket_landing_params_20hz.hpp"
-
-// Trajectory
-// #include "quadrotor_100hz_ref_hover.hpp"
+#include "quadrotor_50hz_Q1e2.hpp"
 
 // Edit the debug name to get nice debug prints
 #define DEBUG_MODULE "MPC"
@@ -72,8 +68,8 @@ static control_t control_data;
 static setpoint_t setpoint_data;
 static sensorData_t sensors_data;
 static state_t state_data;
-static tiny_VectorNx mpc_setpoint;
 static setpoint_t mpc_setpoint_pid;
+static tiny_VectorNx mpc_setpoint;
 // Copies that stay constant for duration of MPC loop
 static setpoint_t setpoint_task;
 static sensorData_t sensors_task;
@@ -183,7 +179,7 @@ void controllerOutOfTreeInit(void)
 
   //////// Box constraints
   tiny_VectorNu u_min_one_time_step(-10, -10, 0.0);
-  tiny_VectorNu u_max_one_time_step(10, 10, 15);
+  tiny_VectorNu u_max_one_time_step(10, 10, 18);
   work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON-1);
   work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON-1);
   // tiny_VectorNx x_min_one_time_step(-5.0, -5.0, -0.5, -10.0, -10.0, -20.0);
@@ -192,7 +188,7 @@ void controllerOutOfTreeInit(void)
   // work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
   //////// Second order cone constraints
-  work.socs->cu[0] = 0.25; // coefficients for input cones (mu)
+  work.socs->cu[0] = 0.3; // coefficients for input cones (mu)
   work.socs->cx[0] = 0.6;  // coefficients for state cones (mu)
   // work.socs->Acu[0] = 0; // start indices for input cones
   // work.socs->Acx[0] = 0; // start indices for state cones
@@ -202,12 +198,12 @@ void controllerOutOfTreeInit(void)
   //////// Settings
   settings.abs_pri_tol = 0.01;
   settings.abs_dua_tol = 0.01;
-  settings.max_iter = 5;
+  settings.max_iter = 10;
   settings.check_termination = 1;
   // settings.en_state_bound = 0;
   settings.en_input_bound = 1;
   // settings.en_state_soc = 0;
-  settings.en_input_soc = 1;
+  settings.en_input_soc = 0;
 
   //////// Initialize other workspace values automatically
   // reset_problem(&solver);
@@ -215,7 +211,7 @@ void controllerOutOfTreeInit(void)
   // Initial state
   // xinit << 4, 2, 20, -3, 2, -4.5;
   xinit << 0, 0, 0.5, 0, 0, 0.0;
-  xg << 0, 0, 1.0, 0, 0, 0.0;
+  xg << 1.0, 0, 0.5, 0, 0, 0.0;
   x0 = xinit * 1.0;
   mpc_setpoint_task << xg;
 
@@ -282,23 +278,26 @@ static void tinympcControllerTask(void *parameters)
       vTaskDelay(M2T(1));
       tiny_solve(&solver);
 
+      // 5. Extract control from solution
+      mpc_setpoint_task = solver.work->x.col(NHORIZON/2);
+      // mpc_setpoint_task << solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2), 0, 0, 0;
+      // mpc_setpoint_task << 0, 0, 0.8, 0, 0, 0;
+
       if (0) {
         // mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000;
         // DEBUG_PRINT("t: %lu\n", mpc_time_us);
 
-        DEBUG_PRINT("zr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(2), solver.work->Xref.col(2)(2), solver.work->Xref.col(3)(2), solver.work->Xref.col(4)(2));
+        // DEBUG_PRINT("zr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(2), solver.work->Xref.col(2)(2), solver.work->Xref.col(3)(2), solver.work->Xref.col(4)(2));
 
-        DEBUG_PRINT("z: %.2f %.2f %.2f %.2f\n", solver.work->x.col(1)(2), solver.work->x.col(2)(2), solver.work->x.col(3)(2), solver.work->x.col(4)(2));
+        // DEBUG_PRINT("z: %.2f %.2f %.2f %.2f\n", solver.work->x.col(1)(2), solver.work->x.col(2)(2), solver.work->x.col(3)(2), solver.work->x.col(4)(2));
 
-        DEBUG_PRINT("u: %.2f %.2f %.2f\n", solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2));
+        // DEBUG_PRINT("u: %.2f %.2f %.2f\n", solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2));
 
-        float err = (solver.work->x.col(0) - solver.work->Xref.col(0)).norm();
+        // float err = (solver.work->x.col(0) - solver.work->Xref.col(0)).norm();
+        // DEBUG_PRINT("e: %.2f\n", err);
 
-        DEBUG_PRINT("e: %.2f\n", err);
+        DEBUG_PRINT("sp: %.2f %.2f %.2f\n", mpc_setpoint_task(0), mpc_setpoint_task(1), mpc_setpoint_task(2));
       }
-
-      // mpc_setpoint_task = solver.work->x.col(NHORIZON - 1);
-      mpc_setpoint_task << 0, 0, 0.8, 0, 0, 0;
 
       // Copy the setpoint calculated by the task loop to the global mpc_setpoint
       xSemaphoreTake(dataMutex, portMAX_DELAY);
@@ -351,6 +350,12 @@ void controllerOutOfTree(control_t *control, const setpoint_t *setpoint, const s
     mpc_setpoint_pid.acceleration.y = mpc_setpoint(1);
     mpc_setpoint_pid.acceleration.z = mpc_setpoint(2);
     controllerBrescianini(control, &mpc_setpoint_pid, sensors, state, tick);
+      if (0 && RATE_DO_EXECUTE(10, tick)) {
+        struct vec pError = mkvec(solver.work->x.col(0)(0) - solver.work->Xref.col(0)(0), 
+                                  solver.work->x.col(0)(1) - solver.work->Xref.col(0)(1), 
+                                  solver.work->x.col(0)(2) - solver.work->Xref.col(0)(2));
+        DEBUG_PRINT("e: %f %f %f\n", pError.x, pError.y, pError.z);
+      }
     }
 
     // Don't fly away

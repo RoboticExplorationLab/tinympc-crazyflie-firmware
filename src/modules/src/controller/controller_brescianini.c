@@ -40,6 +40,9 @@
 #include "physicalConstants.h"
 #include "platform_defaults.h"
 
+#define DEBUG_MODULE "BRE"
+#include "debug.h"
+
 static struct mat33 CRAZYFLIE_INERTIA =
     {{{16.6e-6f, 0.83e-6f, 0.72e-6f},
       {0.83e-6f, 16.6e-6f, 1.8e-6f},
@@ -56,12 +59,14 @@ static float tau_z = 0.3;
 static float zeta_z = 0.85;
 
 // time constant of body angle (thrust direction) control
-static float tau_rp = 0.25;
+static float tau_rp = 0.25;  // original value
+// static float tau_rp = 0.2;
 // what percentage is yaw control speed in terms of roll/pitch control speed \in [0, 1], 0 means yaw not controlled
 static float mixing_factor = 1.0;
 
 // time constant of rotational rate control
-static float tau_rp_rate = 0.015;
+static float tau_rp_rate = 0.015; // original value
+// static float tau_rp_rate = 0.01;  
 static float tau_yaw_rate = 0.0075;
 
 // minimum and maximum thrusts
@@ -169,9 +174,12 @@ void controllerBrescianini(control_t *control,
                               setpoint->velocity.y - state->velocity.y,
                               setpoint->velocity.z - state->velocity.z);
 
-    if (setpoint->position.x == 1234.0) {
+    if (setpoint->position.x == 1234.0) {  // track acceleration
       pError = vzero();
       vError = vzero();
+    }
+    if (setpoint->position.x == 2234.0) {  // track velocity
+      pError = vzero();
     }
 
     // ====== LINEAR CONTROL ======
@@ -198,6 +206,10 @@ void controllerBrescianini(control_t *control,
     }
     accDes.z = constrain(accDes.z, -coll_max, coll_max);
 
+    if (0 && RATE_DO_EXECUTE(10, stabilizerStep)) {
+      // DEBUG_PRINT("e: %f %f %f\n", pError.x, pError.y, pError.z);
+      DEBUG_PRINT("a: %f %f %f\n", accDes.x, accDes.y, accDes.z);
+    }
 
     // ====== THRUST CONTROL ======
 
@@ -371,7 +383,7 @@ void controllerBrescianini(control_t *control,
     }
 
     if (control_omega[2] * omega[2] < 0 && fabsf(omega[2]) > heuristic_yaw) { // desired rotational rate in direction opposite to current rotational rate
-      control_omega[2] = omega_rp_max * (omega[2] < 0 ? -1 : 1); // maximum rotational rate in direction of current rotation
+      control_omega[2] = omega_yaw_max * (omega[2] < 0 ? -1 : 1); // maximum rotational rate in direction of current rotation
     }
 
     // scale the commands to satisfy rate constraints
@@ -387,6 +399,7 @@ void controllerBrescianini(control_t *control,
   }
 
   if (setpoint->mode.z == modeDisable) {
+  // if (1) {
     control->thrustSi = 0.0f;
     control->torque[0] =  0.0f;
     control->torque[1] =  0.0f;
