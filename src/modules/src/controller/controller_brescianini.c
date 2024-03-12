@@ -97,7 +97,7 @@ void controllerBrescianiniInit(void) {
 
 
 #define UPDATE_RATE RATE_100_HZ
-
+#define NONZERO_YAW 0 // 0 if yaw setpoint is always zero, 1 otherwise, used for track mode
 
 void controllerBrescianini(control_t *control,
                                  const setpoint_t *setpoint,
@@ -174,12 +174,13 @@ void controllerBrescianini(control_t *control,
                               setpoint->velocity.y - state->velocity.y,
                               setpoint->velocity.z - state->velocity.z);
 
-    if (setpoint->position.x == 12342.0) {  // track acceleration
+    if (setpoint->attitude.yaw == 12341.0 || setpoint->attitude.yaw == 12344.0) {
+      pError = vzero();
+    }
+
+    if (setpoint->attitude.yaw == 12342.0) { 
       pError = vzero();
       vError = vzero();
-    }
-    if (setpoint->position.x == 12341.0) {  // track velocity
-      pError = vzero();
     }
 
     // ====== LINEAR CONTROL ======
@@ -201,12 +202,9 @@ void controllerBrescianini(control_t *control,
     accDes.z += 1.0f / tau_z / tau_z * pError.z;
     accDes.z += 2.0f * zeta_z / tau_z * vError.z;
     accDes.z += setpoint->acceleration.z;
-    if (setpoint->position.x == 12342.0) {
-      accDes.z -= GRAVITY_MAGNITUDE;
-    }
     accDes.z = constrain(accDes.z, -coll_max, coll_max);
-
-    if (1 && RATE_DO_EXECUTE(10, stabilizerStep)) {
+    
+    if (0 && RATE_DO_EXECUTE(10, stabilizerStep)) {
       // DEBUG_PRINT("e: %f %f %f\n", pError.x, pError.y, pError.z);
       DEBUG_PRINT("a: %.2f %.2f %.2f\n", accDes.x, accDes.y, accDes.z);
     }
@@ -318,7 +316,7 @@ void controllerBrescianini(control_t *control,
                                              cosf(alpha / 2.0f));
 
     // the quaternion corresponding to a rotation to the desired yaw
-    struct quat attFullReqYaw = mkquat(0, 0, sinf(radians(setpoint->attitude.yaw) / 2.0f), cosf(radians(setpoint->attitude.yaw) / 2.0f));
+    struct quat attFullReqYaw = mkquat(0, 0, sinf(radians(NONZERO_YAW*setpoint->attitude.yaw) / 2.0f), cosf(radians(NONZERO_YAW*setpoint->attitude.yaw) / 2.0f));
 
     // the full rotation (roll & pitch, then yaw)
     attDesiredFull = qqmul(attFullReqPitchRoll, attFullReqYaw);
@@ -371,7 +369,7 @@ void controllerBrescianini(control_t *control,
     // compute the commanded body rates
     control_omega[0] = 2.0f / tau_rp * attError.x;
     control_omega[1] = 2.0f / tau_rp * attError.y;
-    control_omega[2] = 2.0f / tau_rp * attError.z + radians(setpoint->attitudeRate.yaw); // due to the mixing, this will behave with time constant tau_yaw
+    control_omega[2] = 2.0f / tau_rp * attError.z + radians(NONZERO_YAW*setpoint->attitudeRate.yaw); // due to the mixing, this will behave with time constant tau_yaw
 
     // apply the rotation heuristic
     if (control_omega[0] * omega[0] < 0 && fabsf(omega[0]) > heuristic_rp) { // desired rotational rate in direction opposite to current rotational rate
@@ -397,7 +395,9 @@ void controllerBrescianini(control_t *control,
     control_omega[2] /= scaling;
     control_thrust = collCmd;
   }
+  // END OF 100 Hz ATTITUDE CONTROL
 
+  // 1000 Hz BODY RATE CONTROL
   if (setpoint->mode.z == modeDisable) {
   // if (1) {
     control->thrustSi = 0.0f;
