@@ -37,7 +37,7 @@ extern "C"
 
 // Params
 // #include "quadrotor_50hz_Q1e1.hpp"
-#include "quadrotor_20hz_Q1e2_1e1.hpp"
+#include "quadrotor_50hz_Q1e2_1e1.hpp"
 // #include "quadrotor_20hz.hpp"
 
 // Edit the debug name to get nice debug prints
@@ -50,7 +50,7 @@ extern "C"
 #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define ALPHA_LPF 1.0 // how much to use current setpoint
-#define TRACK_MODE 3  // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for bres
+#define TRACK_MODE 14 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for bres
 
   // Semaphore to signal that we got data from the stabilizer loop to process
   static SemaphoreHandle_t runTaskSemaphore;
@@ -88,18 +88,9 @@ extern "C"
   static TinySettings settings;
   static TinySolver solver{&settings, &cache, &work};
 
-  // static float u_min_data[] = {-10.0, -10.0, -10.0};
-  // static float u_max_data[] = {105, 105, 105};
-  // static float x_min_data[] = {-5.0, -5.0, -0.5, -10.0, -10.0, -20.0};
-  // static float x_max_data[] = {5.0, 5.0, 0.5, 10.0, 10.0, 20.0};
-
-  static tiny_MatrixNxNh problem_x;
-  static float horizon_nh_z;
-  static tiny_VectorNu u_lqr;
-  static tiny_VectorNx current_state;
-  static tiny_VectorNx xinit;
-  static tiny_VectorNx xg;
   static tiny_VectorNx x0;
+  static tiny_VectorNx x1;
+  static tiny_VectorNx x2;
 
   // Helper variables
   static int8_t result = 0;
@@ -177,17 +168,22 @@ extern "C"
   void updateHorizonReference(const setpoint_t *setpoint)
   {
     traj_idx++;
-    for (int i = 0; i < NHORIZON; i++)
+    if (traj_idx <= NTOTAL)
     {
-      if (traj_idx + i >= NTOTAL)
-      {
-        work.Xref.col(i) = xg;
-      }
-      else
-      {
-        // work.Xref.col(i) = xinit + (xg - xinit) * tinytype(i + traj_idx) / (NTOTAL);
-        work.Xref.col(i) = xg;
-      }
+      work.Xref = x0.replicate(1, NHORIZON);
+    }
+    else if (traj_idx <= 2*NTOTAL)
+    {
+      work.Xref = x1.replicate(1, NHORIZON);
+    }
+    else if (traj_idx <= 3*NTOTAL)
+    {
+      work.Xref = x2.replicate(1, NHORIZON);
+    }
+    else 
+    {
+      traj_idx = 3*NTOTAL+1;
+      work.Xref = x0.replicate(1, NHORIZON);
     }
   }
 
@@ -229,17 +225,17 @@ extern "C"
     // work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
     //////// Second order cone constraints
-    work.socs->cu[0] = 0.35; // coefficients for input cones (mu)
-    work.socs->cx[0] = 0.6; // coefficients for state cones (mu)
+    work.socs->cu[0] = 0.3; // coefficients for input cones (mu)
+    // work.socs->cx[0] = 0.6; // coefficients for state cones (mu)
     // work.socs->Acu[0] = 0; // start indices for input cones
     // work.socs->Acx[0] = 0; // start indices for state cones
     work.socs->qcu[0] = 3; // dimensions for input cones
-    work.socs->qcx[0] = 3; // dimensions for state cones
+    // work.socs->qcx[0] = 3; // dimensions for state cones
 
     //////// Settings
-    settings.abs_pri_tol = 0.01;
-    settings.abs_dua_tol = 0.01;
-    settings.max_iter = 22;
+    // settings.abs_pri_tol = 0.01;  // no termination
+    // settings.abs_dua_tol = 0.01;
+    settings.max_iter = 2;
     // settings.check_termination = 0;
     // settings.en_state_bound = 0;
     settings.en_input_bound = 1;
@@ -250,11 +246,9 @@ extern "C"
     // reset_problem(&solver);
 
     // Initial state
-    // xinit << 4, 2, 20, -3, 2, -4.5;
-    xinit << 0, 0, 0.5, 0, 0, 0.0;
-    xg << 2.0, 0, 0.5, 0, 0, 0.0;
-    x0 = xinit * 1.0;
-    mpc_setpoint_task << xg;
+    x0 << 0, 0, 0.5, 0, 0, 0;
+    x1 << 3, 0, 0.5, 0, 0, 0;
+    x2 << 3, 3, 0.5, 0, 0, 0;
 
     // Uref stays constant, Xref interpolate between start and goal states
     for (int i = 0; i < NHORIZON - 1; i++)
@@ -310,7 +304,7 @@ extern "C"
         updateHorizonReference(&setpoint_task);
 
         // 3. Reset dual variables if needed
-        // reset_dual(&solver);
+        reset_dual(&solver);
 
         // 4. Solve MPC problem
         mpc_start_timestamp = usecTimestamp();
@@ -321,9 +315,9 @@ extern "C"
         tiny_solve(&solver);
 
         // 5. Extract control from solution (state + input)
-        if (TRACK_MODE == 14)  // no MPC, direct low-level tracking
+        if (TRACK_MODE == 14) // no MPC, direct low-level tracking
         {
-          mpc_setpoint_task << xg(0), xg(1), xg(2), xg(3), xg(4), xg(5), 0, 0, 0;
+          mpc_setpoint_task << solver.work->Xref.col(0)(0), solver.work->Xref.col(0)(1), solver.work->Xref.col(0)(2), solver.work->Xref.col(0)(3), solver.work->Xref.col(0)(4), solver.work->Xref.col(0)(5), 0, 0, 0;
         }
         else
         {
@@ -334,12 +328,12 @@ extern "C"
         // mpc_setpoint_task = ALPHA_LPF * mpc_setpoint_task + (1 - ALPHA_LPF) * mpc_setpoint_prev;
         // mpc_setpoint_prev = mpc_setpoint_task;
 
-        if (0)
+        if (1)
         {
           // mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000;
           // DEBUG_PRINT("t: %lu\n", mpc_time_us);
 
-          // DEBUG_PRINT("zr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(2), solver.work->Xref.col(2)(2), solver.work->Xref.col(3)(2), solver.work->Xref.col(4)(2));
+          // DEBUG_PRINT("xr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(0), solver.work->Xref.col(2)(0), solver.work->Xref.col(3)(0), solver.work->Xref.col(4)(0));
 
           // DEBUG_PRINT("z: %.2f %.2f %.2f %.2f\n", solver.work->x.col(1)(2), solver.work->x.col(2)(2), solver.work->x.col(3)(2), solver.work->x.col(4)(2));
 
@@ -438,7 +432,7 @@ extern "C"
         controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
         // controllerMellingerFirmware(control, &setpoint_low_level, sensors, state, tick);
       }
-      if (1 && RATE_DO_EXECUTE(10, tick))
+      if (0 && RATE_DO_EXECUTE(10, tick))
       {
         struct vec pError = mkvec(solver.work->x.col(0)(0) - solver.work->Xref.col(0)(0),
                                   solver.work->x.col(0)(1) - solver.work->Xref.col(0)(1),
@@ -447,7 +441,7 @@ extern "C"
         // DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(0), mpc_setpoint(1), mpc_setpoint(2));
       }
       // Don't fly away
-      if (0)
+      if (1)
       {
         control->normalizedForces[0] = 0.0f;
         control->normalizedForces[1] = 0.0f;
