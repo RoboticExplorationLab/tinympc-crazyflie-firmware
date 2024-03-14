@@ -38,7 +38,7 @@ extern "C"
 
 // Params
 // #include "quadrotor_50hz_Q1e1.hpp"
-#include "quadrotor_50hz_Q1e2_1e1.hpp"
+#include "quadrotor_50hz_R1e2_1e2.hpp"
 // #include "quadrotor_20hz.hpp"
 
 // Edit the debug name to get nice debug prints
@@ -51,10 +51,10 @@ extern "C"
 // #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define ALPHA_LPF 1.0 // how much to use current setpoint
-#define TRACK_MODE 15 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level, 15 for nominal PD
+#define TRACK_MODE 1 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level, 15 for nominal PD
 
 #define NRUNS (NTOTAL - NHORIZON - 1)
-#define dt (1 / MPC_RATE)
+#define dt (1.0 / MPC_RATE)
 #define NPOS (NSTATES / 2)
 
   // Semaphore to signal that we got data from the stabilizer loop to process
@@ -86,8 +86,8 @@ extern "C"
   static Matrix<tinytype, NSTATES + NINPUTS, 1> mpc_setpoint_prev;
 
   // Nominal PD controller
-  const float kp = 20.0;
-  const float kd = 5.0;
+  const float kp = 25.0;
+  const float kd = 4.0;
 
   /* Allocate global variables for MPC */
   static TinyBounds bounds;
@@ -98,12 +98,11 @@ extern "C"
   static TinySolver solver{&settings, &cache, &work};
 
   static tiny_VectorNx x0;
-  static tiny_VectorNx x1;
-  static tiny_VectorNx x2;
 
   static tiny_VectorNx xhrz;
   static tiny_VectorNx xd;
   static tiny_VectorNu uk;
+  static float temp;
 
   // Helper variables
   static uint32_t prev_mpc_timestamp = 0;
@@ -135,26 +134,12 @@ extern "C"
   void updateHorizonReference(const setpoint_t *setpoint)
   {
     traj_idx++;
-    // if (traj_idx <= NTOTAL)
-    // {
-    //   work.Xref = x1.replicate(1, NHORIZON);
-    // }
-    // else if (traj_idx <= 2*NTOTAL)
-    // {
-    //   work.Xref = x2.replicate(1, NHORIZON);
-    // }
-    // else
-    // {
-    //   traj_idx = 3*NTOTAL;
-    //   work.Xref = x0.replicate(1, NHORIZON);
-    // }
-    work.Xref = xd.replicate(1, NHORIZON);
   }
 
   void controllerOutOfTreeInit(void)
   {
-    controllerPidInit();
-    // controllerBrescianiniInit();
+    // controllerPidInit();
+    controllerBrescianiniInit();
     // controllerMellingerFirmwareInit();
     // controllerINDIInit();
 
@@ -184,30 +169,27 @@ extern "C"
     tiny_VectorNu u_max_one_time_step(18, 18, 18.0);
     work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON - 1);
     work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON - 1);
-    tiny_VectorNx x_min_one_time_step(-1, -1, 0.0, -2, -2, -2);
-    tiny_VectorNx x_max_one_time_step(1, 1, 2.0, 2, 2, 2);
+    tiny_VectorNx x_min_one_time_step(-1.5, -1.5, 0.0, -100, -100, -100);
+    tiny_VectorNx x_max_one_time_step(1.5, 1.5, 2.0, 100, 100, 100);
     work.bounds->x_min = x_min_one_time_step.replicate(1, NHORIZON);
     work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
+    //////// Second order cone constraints
+    work.socs->cu[0] = 0.8; // coefficients for input cones (mu)
+    work.socs->qcu[0] = 3; // dimensions for input cones
+
     //////// Settings
     settings.max_iter = 10;
-    settings.en_input_bound = 1;
+    settings.en_input_bound = 0;
     settings.en_state_bound = 1;
+    settings.en_input_soc = 0;
 
     //////// Initialize other workspace values automatically
     // reset_problem(&solver);
 
     // Initial state
     x0 << 0, 0, 0.5, 0, 0, 0;
-    x1 << 1, 0, 0.5, 0, 0, 0;
-    x2 << 2, 2, 0.5, 0, 0, 0;
-
-    // Uref stays constant, Xref interpolate between start and goal states
-    for (int i = 0; i < NHORIZON - 1; i++)
-    {
-      work.Uref.col(i)(2) = GRAVITY_MAGNITUDE;
-    }
-    // updateHorizonReference(&setpoint_task);
+    uk << 0, 0, GRAVITY_MAGNITUDE;
 
     /* Begin task initialization */
     runTaskSemaphore = xSemaphoreCreateBinary();
@@ -253,36 +235,31 @@ extern "C"
         xhrz = work.x.col(0);
 
         // Rollout the nominal system
+        traj_idx++;
         for (int k = 0; k < NHORIZON - 1; k++)
         {
-          float temp = 2.0 * sin(0.5 * dt * (traj_idx + k));
+          temp = 2 * sin(1.5 * dt * (traj_idx + k));
           xd(0) = temp;
           xd(2) = 0.5;
           // xd = x1;
           // pid controller
-          solver.work->Uref.col(k) = kp * (xd(Eigen::seq(0, NPOS - 1)) - xhrz(Eigen::seq(0, NPOS - 1))) + kd * (xd(Eigen::seq(NPOS, NSTATES - 1)) - xhrz(Eigen::seq(NPOS, NSTATES - 1)));
-          xhrz = solver.work->Adyn * xhrz + solver.work->Bdyn * solver.work->Uref.col(k);
+          solver.work->Uref.col(k) = kp * (xd(Eigen::seq(0, NPOS - 1)) - xhrz(Eigen::seq(0, NPOS - 1))) + kd * (xd(Eigen::seq(NPOS, NSTATES - 1)) - xhrz(Eigen::seq(NPOS, NSTATES - 1))) + uk;
+          xhrz = solver.work->Adyn * xhrz + solver.work->Bdyn * solver.work->Uref.col(k) + solver.work->fdyn;
           if (k == 10 && TRACK_MODE == 15)
           {
             mpc_setpoint_task << xhrz(0), xhrz(1), xhrz(2), xhrz(3), xhrz(4), xhrz(5), 0, 0, 0;
           }
         }
 
-        // work.x.col(0) = x0;
-
-        // 2. Update control reference
-        updateHorizonReference(&setpoint_task);
-
-        // 3. Reset dual variables if needed
-        // reset_dual(&solver);
-
-        // 4. Solve MPC problem
-        // mpc_start_timestamp = usecTimestamp();
-        // tiny_solve(&solver);
-        // vTaskDelay(M2T(1));
-        // tiny_solve(&solver);
-        // vTaskDelay(M2T(1));
-        // tiny_solve(&solver);
+        // PREDICTIVE SAFETY FILTERING
+        if (TRACK_MODE != 15) {
+          mpc_start_timestamp = usecTimestamp();
+          tiny_solve(&solver);
+          vTaskDelay(M2T(1));
+          tiny_solve(&solver);
+          vTaskDelay(M2T(1));
+          tiny_solve(&solver);
+        }
 
         // 5. Extract control from solution (state + input)
         if (TRACK_MODE == 14) // no MPC, direct low-level tracking
@@ -291,12 +268,9 @@ extern "C"
         }
         else if (TRACK_MODE != 15)
         {
-          int cmd_idx = 20;
+          int cmd_idx = NHORIZON - 5;
           mpc_setpoint_task << solver.work->x.col(cmd_idx)(0), solver.work->x.col(cmd_idx)(1), solver.work->x.col(cmd_idx)(2), solver.work->x.col(cmd_idx)(3), solver.work->x.col(cmd_idx)(4), solver.work->x.col(cmd_idx)(5), solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2) - GRAVITY_MAGNITUDE;
         }
-        // Low-pass filter the setpoint
-        // mpc_setpoint_task = ALPHA_LPF * mpc_setpoint_task + (1 - ALPHA_LPF) * mpc_setpoint_prev;
-        // mpc_setpoint_prev = mpc_setpoint_task;
 
         if (0)
         {
@@ -347,10 +321,10 @@ extern "C"
         setpoint_low_level.position.x = mpc_setpoint(0);
         setpoint_low_level.position.y = mpc_setpoint(1);
         setpoint_low_level.position.z = mpc_setpoint(2);
-        controllerPid(control, &setpoint_low_level, sensors, state, tick);
+        // controllerPid(control, &setpoint_low_level, sensors, state, tick);
         // controllerMellingerFirmware(control, &setpoint_low_level, sensors, state, tick);
         // controllerINDI(control, &setpoint_low_level, sensors, state, tick);
-        // controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
+        controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
       }
       if (TRACK_MODE == 1 || TRACK_MODE == 15)
       {
@@ -376,8 +350,8 @@ extern "C"
         setpoint_low_level.velocity.x = mpc_setpoint(3);
         setpoint_low_level.velocity.y = mpc_setpoint(4);
         setpoint_low_level.velocity.z = mpc_setpoint(5);
-        // controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
-        controllerINDI(control, &setpoint_low_level, sensors, state, tick);
+        controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
+        // controllerINDI(control, &setpoint_low_level, sensors, state, tick);
       }
       if (TRACK_MODE == 4)
       {
@@ -410,7 +384,7 @@ extern "C"
                                   solver.work->x.col(0)(2) - solver.work->Xref.col(0)(2));
         DEBUG_PRINT("exz: %.2f %.2f\n", pError.x, pError.z);
         // DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(0), mpc_setpoint(1), mpc_setpoint(2));
-        DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(3), mpc_setpoint(4), mpc_setpoint(5));
+        // DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(3), mpc_setpoint(4), mpc_setpoint(5));
       }
       // NO FLYING
       if (0)

@@ -229,14 +229,14 @@ extern "C"
      */
     void update_linear_cost(TinySolver *solver)
     {
-        solver->work->r = -(solver->work->Uref.array().colwise() * solver->work->R.array()); // Uref = 0 so commented out for speed up. Need to uncomment if using Uref
+        solver->work->r = -(solver->work->Uref.array().colwise() * (solver->work->R.array()-1*solver->cache->rho*tiny_VectorNu::Ones().array()));
         (solver->work->r).noalias() += -solver->cache->rho * (solver->work->bounds->znew - solver->work->bounds->y);
         if (solver->settings->en_input_soc && NUM_INPUT_CONES > 0) {
             for (int i=0; i<NUM_INPUT_CONES; i++) {
                 (solver->work->r).noalias() -= solver->cache->rho * (solver->work->socs->zcnew[i] - solver->work->socs->yc[i]);
             }
         }
-        solver->work->q = -(solver->work->Xref.array().colwise() * solver->work->Q.array());
+        solver->work->q = -(solver->work->Xref.array().colwise() * (solver->work->Q.array()-1*solver->cache->rho*tiny_VectorNx::Ones().array()));
         (solver->work->q).noalias() -= solver->cache->rho * (solver->work->bounds->vnew - solver->work->bounds->g);
         if (solver->settings->en_state_soc && NUM_STATE_CONES > 0) {
             for (int i=0; i<NUM_STATE_CONES; i++) {
