@@ -165,24 +165,24 @@ extern "C"
     work.R = Eigen::Map<const tiny_VectorNu>(R_data);
 
     //////// Box constraints
-    tiny_VectorNu u_min_one_time_step(-18, -18, 0.0);
-    tiny_VectorNu u_max_one_time_step(18, 18, 18.0);
+    tiny_VectorNu u_min_one_time_step(-2, -2, 0.0);
+    tiny_VectorNu u_max_one_time_step(2, 2, 15.0);
     work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON - 1);
     work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON - 1);
-    tiny_VectorNx x_min_one_time_step(-1.5, -1.5, 0.0, -100, -100, -100);
-    tiny_VectorNx x_max_one_time_step(1.5, 1.5, 2.0, 100, 100, 100);
+    tiny_VectorNx x_min_one_time_step(-1.0, -1.0, 0.5, -100, -100, -100);
+    tiny_VectorNx x_max_one_time_step(1.0, 1.0, 0.5, 100, 100, 100);
     work.bounds->x_min = x_min_one_time_step.replicate(1, NHORIZON);
     work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
     //////// Second order cone constraints
-    work.socs->cu[0] = 0.8; // coefficients for input cones (mu)
+    work.socs->cu[0] = 0.2; // coefficients for input cones (mu)
     work.socs->qcu[0] = 3; // dimensions for input cones
 
     //////// Settings
     settings.max_iter = 10;
-    settings.en_input_bound = 0;
-    settings.en_state_bound = 1;
-    settings.en_input_soc = 0;
+    // settings.en_input_bound = 1;
+    // settings.en_state_bound = 1;
+    settings.en_input_soc = 1;
 
     //////// Initialize other workspace values automatically
     // reset_problem(&solver);
@@ -268,7 +268,7 @@ extern "C"
         }
         else if (TRACK_MODE != 15)
         {
-          int cmd_idx = NHORIZON - 5;
+          int cmd_idx = NHORIZON - 1;
           mpc_setpoint_task << solver.work->x.col(cmd_idx)(0), solver.work->x.col(cmd_idx)(1), solver.work->x.col(cmd_idx)(2), solver.work->x.col(cmd_idx)(3), solver.work->x.col(cmd_idx)(4), solver.work->x.col(cmd_idx)(5), solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2) - GRAVITY_MAGNITUDE;
         }
 
