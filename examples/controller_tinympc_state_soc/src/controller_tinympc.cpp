@@ -55,7 +55,7 @@ extern "C"
 // #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define ALPHA_LPF 1.0 // how much to use current setpoint
-#define TRACK_MODE 14 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level
+#define TRACK_MODE 0 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level
 
   // Semaphore to signal that we got data from the stabilizer loop to process
   static SemaphoreHandle_t runTaskSemaphore;
@@ -218,8 +218,8 @@ extern "C"
       nowMs = T2M(xTaskGetTickCount());
       if (nowMs >= nextMpcMs)
       {
-        // mpc_time_us = nowMs - prev_mpc_timestamp;
-        // prev_mpc_timestamp = nowMs;
+        mpc_time_us = nowMs - prev_mpc_timestamp;
+        prev_mpc_timestamp = nowMs;
         nextMpcMs = nowMs + (uint32_t)(1000.0 / MPC_RATE);
 
         // Update task data with most recent stabilizer loop data
@@ -265,10 +265,10 @@ extern "C"
 
         if (0)
         {
-          // mpc_time_us = usecTimestamp() - mpc_start_timestamp - 1000;
-          // DEBUG_PRINT("t: %lu\n", mpc_time_us);
+          // mpc_time_us = usecTimestamp() - mpc_start_timestamp - 2000;
+          DEBUG_PRINT("t: %lu\n", mpc_time_us);
 
-          DEBUG_PRINT("zr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(2), solver.work->Xref.col(2)(2), solver.work->Xref.col(3)(2), solver.work->Xref.col(4)(2));
+          // DEBUG_PRINT("zr: %.2f %.2f %.2f %.2f\n", solver.work->Xref.col(1)(2), solver.work->Xref.col(2)(2), solver.work->Xref.col(3)(2), solver.work->Xref.col(4)(2));
 
           // DEBUG_PRINT("z: %.2f %.2f %.2f %.2f\n", solver.work->x.col(1)(2), solver.work->x.col(2)(2), solver.work->x.col(3)(2), solver.work->x.col(4)(2));
 
