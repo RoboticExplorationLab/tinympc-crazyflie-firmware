@@ -55,7 +55,7 @@ extern "C"
 // #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define ALPHA_LPF 1.0 // how much to use current setpoint
-#define TRACK_MODE 0 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level
+#define TRACK_MODE 14 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level
 
   // Semaphore to signal that we got data from the stabilizer loop to process
   static SemaphoreHandle_t runTaskSemaphore;
@@ -139,7 +139,7 @@ extern "C"
   }
 
   void controllerOutOfTreeInit(void)
-  {
+  {    
     // controllerPidInit();
     controllerBrescianiniInit();
     // controllerMellingerFirmwareInit();
@@ -173,7 +173,7 @@ extern "C"
     // 1.73 ~ 60 degrees
     // 1 ~ 45 degress
     // 0.58 ~ 30 degrees
-    work.socs->cx[0] = 0.58; // coefficients for input cones (mu)
+    work.socs->cx[0] = 1.73; // coefficients for input cones (mu)
     work.socs->qcx[0] = 3; // dimensions for input cones
 
     //////// Settings
