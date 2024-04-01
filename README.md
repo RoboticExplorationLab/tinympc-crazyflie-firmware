@@ -2,7 +2,7 @@
 
 This repo contains the source code for the TinyMPC-integrated firmware used in the Crazyflie 2.1. TinyMPC is publicly available at [tinympc.org](https://tinympc.org/).
 
-Currently, it supports (latest development in `demo/socp` branch):
+Currently, it supports (latest development in `demos/socp` branch):
 
 * Full-state quaternion-based LQR or LQI controller within the app layer in `examples/controller_lqr` and `examples/controller_lqi`.
 * Full-state quaternion-based TinyMPC with significantly hacked code in `example/controller_mpc*`.
