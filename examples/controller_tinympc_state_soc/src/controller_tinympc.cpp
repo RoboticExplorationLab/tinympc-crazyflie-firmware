@@ -173,7 +173,7 @@ extern "C"
     // 1.73 ~ 60 degrees
     // 1 ~ 45 degress
     // 0.58 ~ 30 degrees
-    work.socs->cx[0] = 1.73; // coefficients for input cones (mu)
+    work.socs->cx[0] = 1; // coefficients for input cones (mu)
     work.socs->qcx[0] = 3; // dimensions for input cones
 
     //////// Settings

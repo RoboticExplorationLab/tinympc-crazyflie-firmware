@@ -51,7 +51,7 @@ extern "C"
 // #define MPC_RATE RATE_100_HZ
 #define LOWLEVEL_RATE RATE_500_HZ
 #define ALPHA_LPF 1.0 // how much to use current setpoint
-#define TRACK_MODE 1 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level, 15 for nominal PD
+#define TRACK_MODE 0 // 0 for position, 1 for velocity, 2 for acceleration, 3 for pos and vel, 4 for vel and acc, 5 for all, 14 for low level, 15 for nominal PD
 
 #define NRUNS (NTOTAL - NHORIZON - 1)
 #define dt (1.0 / MPC_RATE)
@@ -86,8 +86,8 @@ extern "C"
   static Matrix<tinytype, NSTATES + NINPUTS, 1> mpc_setpoint_prev;
 
   // Nominal PD controller
-  const float kp = 25.0;
-  const float kd = 4.0;
+  const float kp = 15.0;
+  const float kd = 5.0;
 
   /* Allocate global variables for MPC */
   static TinyBounds bounds;
@@ -169,17 +169,16 @@ extern "C"
     tiny_VectorNu u_max_one_time_step(18, 18, 18.0);
     work.bounds->u_min = u_min_one_time_step.replicate(1, NHORIZON - 1);
     work.bounds->u_max = u_max_one_time_step.replicate(1, NHORIZON - 1);
-    tiny_VectorNx x_min_one_time_step(-1.5, -1.5, 0.0, -3, -3, -3);
-    tiny_VectorNx x_max_one_time_step(1.5, 1.5, 2.0, 3, 3, 3);
+    tiny_VectorNx x_min_one_time_step(-0.6, -0.6, 0.0, -3, -3, -3);
+    tiny_VectorNx x_max_one_time_step(0.6, 0.6, 1.0, 3, 3, 3);
     work.bounds->x_min = x_min_one_time_step.replicate(1, NHORIZON);
     work.bounds->x_max = x_max_one_time_step.replicate(1, NHORIZON);
 
     //////// Second order cone constraints
     // work.socs->cu[0] = 0.2; // coefficients for input cones (mu)
     // work.socs->qcu[0] = 3; // dimensions for input cones
-
     //////// Settings
-    settings.max_iter = 10;
+    settings.max_iter = 9;
     // settings.en_input_bound = 1;
     settings.en_state_bound = 1;
     // settings.en_input_soc = 1;
@@ -188,7 +187,7 @@ extern "C"
     // reset_problem(&solver);
 
     // Initial state
-    x0 << 0, 0, 0.5, 0, 0, 0;
+    x0 << 0, 0, 1.0, 0, 0, 0;
     uk << 0, 0, GRAVITY_MAGNITUDE;
 
     /* Begin task initialization */
@@ -238,14 +237,14 @@ extern "C"
         traj_idx++;
         for (int k = 0; k < NHORIZON - 1; k++)
         {
-          temp = 2 * sin(1.5 * dt * (traj_idx + k));
-          xd(0) = temp;
-          xd(2) = 0.5;
+          temp = 1.2 * sin(1.5 * dt * (traj_idx + k));
+          xd(1) = temp;
+          xd(2) = 0.7;
           // xd = x1;
           // pid controller
           solver.work->Uref.col(k) = kp * (xd(Eigen::seq(0, NPOS - 1)) - xhrz(Eigen::seq(0, NPOS - 1))) + kd * (xd(Eigen::seq(NPOS, NSTATES - 1)) - xhrz(Eigen::seq(NPOS, NSTATES - 1))) + uk;
           xhrz = solver.work->Adyn * xhrz + solver.work->Bdyn * solver.work->Uref.col(k) + solver.work->fdyn;
-          if (k == 10 && TRACK_MODE == 15)
+          if (k == 5 && TRACK_MODE == 15)
           {
             mpc_setpoint_task << xhrz(0), xhrz(1), xhrz(2), xhrz(3), xhrz(4), xhrz(5), 0, 0, 0;
           }
@@ -268,7 +267,7 @@ extern "C"
         }
         else if (TRACK_MODE != 15)
         {
-          int cmd_idx = NHORIZON - 7;
+          int cmd_idx = NHORIZON - 1;
           mpc_setpoint_task << solver.work->x.col(cmd_idx)(0), solver.work->x.col(cmd_idx)(1), solver.work->x.col(cmd_idx)(2), solver.work->x.col(cmd_idx)(3), solver.work->x.col(cmd_idx)(4), solver.work->x.col(cmd_idx)(5), solver.work->u.col(0)(0), solver.work->u.col(0)(1), solver.work->u.col(0)(2) - GRAVITY_MAGNITUDE;
         }
 
@@ -333,6 +332,7 @@ extern "C"
         setpoint_low_level.velocity.y = mpc_setpoint(4);
         setpoint_low_level.velocity.z = mpc_setpoint(5);
         controllerBrescianini(control, &setpoint_low_level, sensors, state, tick);
+        // controllerPid(control, &setpoint_low_level, sensors, state, tick);
       }
       if (TRACK_MODE == 2)
       {
@@ -382,7 +382,7 @@ extern "C"
         struct vec pError = mkvec(solver.work->x.col(0)(0) - solver.work->Xref.col(0)(0),
                                   solver.work->x.col(0)(1) - solver.work->Xref.col(0)(1),
                                   solver.work->x.col(0)(2) - solver.work->Xref.col(0)(2));
-        DEBUG_PRINT("exz: %.2f %.2f\n", pError.x, pError.z);
+        DEBUG_PRINT("eyz: %.2f %.2f\n", pError.y, pError.z);
         // DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(0), mpc_setpoint(1), mpc_setpoint(2));
         // DEBUG_PRINT("a: %.2f %.2f %.2f\n", mpc_setpoint(3), mpc_setpoint(4), mpc_setpoint(5));
       }
