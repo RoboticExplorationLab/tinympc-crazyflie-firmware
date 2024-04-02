@@ -8,7 +8,7 @@ Currently, it supports:
 * Full-state quaternion-based TinyMPC supporting quadratic objective, linear system, linear and second-order cone constraints on state and control input in `example/controller_mpc*`.
 * Some other related stuff.
 
-Nothing like these have existed before in the Crazyflie 2.1 that we are aware of. Feel free to reach out to the developers if you have any questions. 
+Feel free to reach out to the developers if you have any questions. 
 
 ### Crazyflie 1.0 support
 
