@@ -13,6 +13,6 @@
 [submodule "vendor/unity"]
 	path = vendor/unity
 	url = https://github.com/throwtheswitch/unity.git
-[submodule "examples/controller_tinympc_eigen_v2/TinyMPC"]
-	path = examples/controller_tinympc_eigen_v2/TinyMPC
+[submodule "examples/controller_tinympc_eigen_task/TinyMPC"]
+	path = examples/controller_tinympc_eigen_task/TinyMPC
 	url = https://github.com/RoboticExplorationLab/TinyMPC

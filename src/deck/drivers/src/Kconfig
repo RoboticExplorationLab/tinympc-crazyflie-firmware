@@ -199,7 +199,7 @@ config DECK_GTGPS
 
 config DECK_LEDRING
     bool "Support the LED-ring deck"
-    default n
+    default y
     help
         Light up the dark with custom patterns using the Crazyflie 2.1
         LED-ring expansion board. Featuring 12 strong RGB LEDs facing
