@@ -98,7 +98,6 @@ jobs:
         - examples/app_peer_to_peer
         - examples/app_p2p_DTR
         - examples/demos/app_push_demo
-        - examples/demos/swarm_demo
         - examples/demos/app_wall_following_demo
     env:
       EXAMPLE: ${{ matrix.example }}
