@@ -10,6 +10,8 @@ Currently, it supports:
 
 High-level commands via https://github.com/sschoedel/crazyswarm/tree/demo/socp
 
+You might want to check different branches for the corresponding experiments.
+
 Feel free to reach out to the developers if you have any questions. 
 
 ### Crazyflie 1.0 support
