@@ -8,6 +8,8 @@ Currently, it supports:
 * Full-state quaternion-based TinyMPC supporting quadratic objective, linear system, linear and second-order cone constraints on state and control input in `example/controller_mpc*`.
 * Some other related stuff.
 
+High-level commands via https://github.com/sschoedel/crazyswarm/tree/demo/socp
+
 Feel free to reach out to the developers if you have any questions. 
 
 ### Crazyflie 1.0 support
