@@ -10,7 +10,7 @@ Currently, it supports:
 
 High-level commands via https://github.com/sschoedel/crazyswarm/tree/demo/socp
 
-You might want to check different branches for the corresponding experiments.
+You might want to check different branches for the corresponding experiments. **Make sure to build and flash the source code in `examples/`.**
 
 Feel free to reach out to the developers if you have any questions. 
 
