@@ -1,6 +1,6 @@
 # TinyMPC-Crazyflie Firmware  [![CI](https://github.com/bitcraze/crazyflie-firmware/workflows/CI/badge.svg)](https://github.com/bitcraze/crazyflie-firmware/actions?query=workflow%3ACI)
 
-**This repo might be deprecated. Recent TinyMPC-Crazyflie firmware is updated at https://github.com/A2R-Lab/tinympc-crazyflie/tree/main.**
+## This repository may be deprecated, please refer to the latest TinyMPC-Crazyflie firmware here: https://github.com/A2R-Lab/tinympc-crazyflie/tree/main
 
 This repo contains the source code for the TinyMPC-integrated firmware used in the Crazyflie 2.1. TinyMPC is publicly available at [tinympc.org](https://tinympc.org/).
 
